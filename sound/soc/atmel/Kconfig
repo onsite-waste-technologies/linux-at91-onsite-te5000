@@ -78,4 +78,13 @@ config SND_ATMEL_SOC_PDMIC
 	help
 	  Say Y if you want to add support for Atmel ASoC driver for boards using
 	  PDMIC.
+
+config SND_ATMEL_SOC_I2S
+	tristate "Atmel ASoC driver for boards using I2S"
+	depends on OF && (ARCH_AT91 || COMPILE_TEST)
+	select SND_SOC_GENERIC_DMAENGINE_PCM
+	select REGMAP_MMIO
+	help
+	  Say Y or M if you want to add support for Atmel ASoc driver for boards
+	  using I2S.
 endif
