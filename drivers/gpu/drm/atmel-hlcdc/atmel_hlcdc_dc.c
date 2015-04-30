@@ -808,6 +808,7 @@ static int atmel_hlcdc_dc_drm_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_unload;
 
+	dev_info(ddev->dev, "DRM device successfully registered\n");
 	return 0;
 
 err_unload:
