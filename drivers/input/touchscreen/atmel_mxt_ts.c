@@ -3727,8 +3727,14 @@ static int mxt_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	}
 
 	error = mxt_initialize(data);
-	if (error)
-		goto err_free_irq;
+	if (error) {
+		/* Wait and try a second time */
+		msleep(MXT_RESET_TIME);
+		dev_warn(&client->dev, "Try a second time to init maxtouch\n");
+		error = mxt_initialize(data);
+		if (error)
+			goto err_free_irq;
+	}
 
 	return 0;
 
