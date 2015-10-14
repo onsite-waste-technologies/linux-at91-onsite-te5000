@@ -107,7 +107,7 @@ ENTRY(at91_pm_suspend_in_sram)
 
 	ldr	r0, .pm_mode
 	tst	r0, #AT91_PM_SLOW_CLOCK
-	beq	skip_disable_main_clock
+	beq	standby_mode
 
 	ldr	pmc, .pmc_base
 
@@ -131,31 +131,12 @@ ENTRY(at91_pm_suspend_in_sram)
 	orr	tmp1, tmp1, #(1 << 29)		/* bit 29 always set */
 	str	tmp1, [pmc, #AT91_CKGR_PLLAR]
 
-	/* Turn off the main oscillator */
-	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
-	bic	tmp1, tmp1, #AT91_PMC_MOSCEN
-	orr	tmp1, tmp1, #AT91_PMC_KEY
-	str	tmp1, [pmc, #AT91_CKGR_MOR]
+ulp0_mode:
+	bl	at91_pm_ulp0_mode
+	b	ulp_exit
 
-skip_disable_main_clock:
+ulp_exit:
 	ldr	pmc, .pmc_base
-
-	/* Wait for interrupt */
-	at91_cpu_idle
-
-	ldr	r0, .pm_mode
-	tst	r0, #AT91_PM_SLOW_CLOCK
-	beq	skip_enable_main_clock
-
-	ldr	pmc, .pmc_base
-
-	/* Turn on the main oscillator */
-	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
-	orr	tmp1, tmp1, #AT91_PMC_MOSCEN
-	orr	tmp1, tmp1, #AT91_PMC_KEY
-	str	tmp1, [pmc, #AT91_CKGR_MOR]
-
-	wait_moscrdy
 
 	/* Restore PLLA setting */
 	ldr	tmp1, .saved_pllar
@@ -177,7 +158,15 @@ skip_disable_main_clock:
 
 	wait_mckrdy
 
-skip_enable_main_clock:
+	b	pm_exit
+
+standby_mode:
+	ldr	pmc, .pmc_base
+
+	/* Wait for interrupt */
+	at91_cpu_idle
+
+pm_exit:
 	/* Exit the self-refresh mode */
 	mov	r0, #SRAMC_SELF_FRESH_EXIT
 	bl	at91_sramc_self_refresh
@@ -310,6 +299,32 @@ sdramc_exit_sf:
 exit_sramc_sf:
 	mov	pc, lr
 ENDPROC(at91_sramc_self_refresh)
+
+/*
+ * void at91_pm_ulp0_mode(void)
+ */
+ENTRY(at91_pm_ulp0_mode)
+	ldr	pmc, .pmc_base
+
+	/* Turn off the crystal oscillator */
+	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
+	bic	tmp1, tmp1, #AT91_PMC_MOSCEN
+	orr	tmp1, tmp1, #AT91_PMC_KEY
+	str	tmp1, [pmc, #AT91_CKGR_MOR]
+
+	/* Wait for interrupt */
+	at91_cpu_idle
+
+	/* Turn on the crystal oscillator */
+	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
+	orr	tmp1, tmp1, #AT91_PMC_MOSCEN
+	orr	tmp1, tmp1, #AT91_PMC_KEY
+	str	tmp1, [pmc, #AT91_CKGR_MOR]
+
+	wait_moscrdy
+
+	mov	pc, lr
+ENDPROC(at91_pm_ulp0_mode)
 
 .pmc_base:
 	.word 0
