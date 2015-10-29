@@ -25,6 +25,8 @@
 #include <linux/platform_data/atmel.h>
 #include <linux/io.h>
 #include <linux/clk/at91_pmc.h>
+#include <linux/mfd/syscon.h>
+#include <linux/regmap.h>
 
 #include <asm/irq.h>
 #include <linux/atomic.h>
@@ -460,6 +462,68 @@ static void __init at91_pm_init(void (*pm_idle)(void))
 		pr_info("AT91: PM not supported, due to no SRAM allocated\n");
 }
 
+static int __init at91_pmc_fast_startup_init(void)
+{
+	struct device_node *np, *cnp;
+	struct regmap *regmap;
+	u32 input, input_mask;
+	u32 mode = 0, polarity = 0;
+
+	np = of_find_compatible_node(NULL, NULL,
+				     "atmel,sama5d2-pmc-fast-startup");
+	if (!np)
+		return -ENODEV;
+
+	regmap = syscon_node_to_regmap(of_get_parent(np));
+	if (IS_ERR(regmap)) {
+		pr_info("AT91: failed to find PMC fast startup node\n");
+		return PTR_ERR(regmap);
+	}
+
+	for_each_child_of_node(np, cnp) {
+		if (of_property_read_u32(cnp, "reg", &input)) {
+			pr_warn("AT91: reg property is missing for %s\n",
+				cnp->full_name);
+			continue;
+		}
+
+		input_mask = 1 << input;
+		if (!(input_mask & AT91_PMC_FS_INPUT_MASK)) {
+			pr_warn("AT91: wake-up input %d out of range\n", input);
+			continue;
+		}
+		mode |= input_mask;
+
+		if (of_property_read_bool(cnp, "atmel,wakeup-active-high"))
+			polarity |= input_mask;
+	}
+
+	if (of_property_read_bool(np, "atmel,wakeup-rtc-timer"))
+		mode |= AT91_PMC_RTCAL;
+
+	if (of_property_read_bool(np, "atmel,wakeup-usb-resume"))
+		mode |= AT91_PMC_USBAL;
+
+	if (of_property_read_bool(np, "atmel,wakeup-sdmmc-cd"))
+		mode |= AT91_PMC_SDMMC_CD;
+
+	if (of_property_read_bool(np, "atmel,wakeup-rxlp-match"))
+		mode |= AT91_PMC_RXLP_MCE;
+
+	if (of_property_read_bool(np, "atmel,wakeup-acc-comparison"))
+		mode |= AT91_PMC_ACC_CE;
+
+	pr_debug("AT91: mode = 0x%x, ploarity = 0%x\n", mode, polarity);
+
+	regmap_write(regmap, AT91_PMC_FSMR, mode);
+
+	regmap_write(regmap, AT91_PMC_FSPR, polarity);
+
+	of_node_put(np);
+
+	return 0;
+}
+
 void __init at91rm9200_pm_init(void)
 {
 	at91_dt_ramc();
@@ -512,4 +576,5 @@ void __init sama5d2_pm_init(void)
 	sama5_pm_init();
 
 	at91_pm_data.ulp_mode = ULP1_MODE;
+	at91_pmc_fast_startup_init();
  }
