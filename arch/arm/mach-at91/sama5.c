@@ -103,6 +103,7 @@ MACHINE_END
 static void __init sama5d2_dt_device_init(void)
 {
 	sama5_common_init();
+	sama5d2_pm_init();
 }
 
 static const char *const sama5d2_dt_board_compat[] __initconst = {
