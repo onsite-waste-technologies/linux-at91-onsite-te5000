@@ -46,7 +46,7 @@
 #include "sama5d4.dtsi"
 
 / {
-	model = "Atmel SAMA5D4 Xplained Sil9022";
+	model = "Atmel SAMA5D4 Xplained SiI9022";
 	compatible = "atmel,sama5d4-xplained", "atmel,sama5d4", "atmel,sama5";
 
 	chosen {
@@ -98,13 +98,13 @@
 			i2c0: i2c@f8014000 {
 				status = "okay";
 
-				sil9022: hdmi-encoder@39 {
-					compatible = "sil,sil9022";
+				sii9022: hdmi-encoder@39 {
+					compatible = "sil,sii9022";
 					reg = <0x39>;
 					reset-gpios = <&pioB 15 GPIO_ACTIVE_LOW>;
 					interrupts-extended = <&pioA 25 IRQ_TYPE_LEVEL_LOW>;
 					pinctrl-names = "default";
-					pinctrl-0 = <&pinctrl_sil9022_irq>;
+					pinctrl-0 = <&pinctrl_sii9022_irq>;
 
 					port {
 						#address-cells = <1>;
@@ -194,7 +194,7 @@
 						atmel,pins =
 							<AT91_PIOE 1 AT91_PERIPH_GPIO AT91_PINCTRL_PULL_UP_DEGLITCH>;
 					};
-					pinctrl_sil9022_irq: sil9022_irq-0 {
+					pinctrl_sii9022_irq: sii9022_irq-0 {
 						atmel,pins =
 							<AT91_PIOA 25 AT91_PERIPH_GPIO AT91_PINCTRL_PULL_UP_DEGLITCH>;
 					};
