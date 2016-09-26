@@ -8,9 +8,14 @@
 #include <linux/regmap.h>
 #include <media/v4l2-subdev.h>
 #include <media/v4l2-image-sizes.h>
+#include <media/v4l2-ctrls.h>
 
 #define PID_OV7740              0x7742
 #define VERSION(pid, ver)       ((pid << 8) | (ver & 0xFF))
+
+#define REG0C       0x0C /* Register 0C */
+#define   REG0C_HFLIP_IMG       0x40 /* Horizontal mirror image ON/OFF */
+#define   REG0C_VFLIP_IMG       0x80 /* Vertical flip image ON/OFF */
 
 #define REG_PID         0x0A /* Product ID Number MSB */
 #define REG_VER         0x0B /* Product ID Number LSB */
@@ -22,7 +27,8 @@
 #define REG_OUTSIZE_LSB 0x34
 
 struct ov7740_priv{
-        struct v4l2_subdev      subdev;
+        struct v4l2_subdev       subdev;
+	struct v4l2_ctrl_handler hdl;
         struct regmap           *regmap;
         struct clk              *xvclk;
 
@@ -174,6 +180,41 @@ static const struct ov7740_framesize ov7740_framesizes[] = {
 };
 
 static struct v4l2_subdev_core_ops ov7740_subdev_core_ops = {
+};
+
+static int ov7740_mask_set(struct regmap *regmap,
+			   u8  reg, u8  mask, u8  set)
+{
+	s32 val;
+	int ret = regmap_read(regmap, reg, &val);
+	if (ret < 0)
+		return val;
+
+	val &= ~mask;
+	val |= set & mask;
+
+	return regmap_write(regmap, reg, val);
+}
+
+static int ov7740_s_ctrl(struct v4l2_ctrl *ctrl)
+{
+	struct regmap *regmap = container_of(ctrl->handler, struct ov7740_priv, hdl)->regmap; /* priv->regmap; */
+	u8 val;
+
+	switch (ctrl->id) {
+	case V4L2_CID_VFLIP:
+		val = ctrl->val ? REG0C_VFLIP_IMG : 0x00;
+		return ov7740_mask_set(regmap, REG0C, REG0C_VFLIP_IMG, val);
+	case V4L2_CID_HFLIP:
+		val = ctrl->val ? REG0C_HFLIP_IMG : 0x00;
+		return ov7740_mask_set(regmap, REG0C, REG0C_HFLIP_IMG, val);
+	}
+
+	return -EINVAL;
+}
+
+static const struct v4l2_ctrl_ops ov7740_ctrl_ops = {
+	.s_ctrl = ov7740_s_ctrl,
 };
 
 static int ov7740_g_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *parms)
@@ -498,6 +539,17 @@ static int ov7740_probe(struct i2c_client *client,
         ret = ov7740_detect(priv);
         if (ret)
                 return ret;
+
+	v4l2_ctrl_handler_init(&priv->hdl, 2);
+	v4l2_ctrl_new_std(&priv->hdl, &ov7740_ctrl_ops,
+			V4L2_CID_VFLIP, 0, 1, 1, 0);
+	v4l2_ctrl_new_std(&priv->hdl, &ov7740_ctrl_ops,
+			V4L2_CID_HFLIP, 0, 1, 1, 0);
+	sd->ctrl_handler = &priv->hdl;
+
+	ret = v4l2_ctrl_handler_setup(&priv->hdl);
+	if (ret)
+		return ret;
 
         ret = v4l2_async_register_subdev(sd);
 	if (ret)
