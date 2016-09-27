@@ -23,6 +23,12 @@
 #include <linux/mutex.h>
 #include <linux/completion.h>
 
+#include <linux/mmc/host.h>
+#include <linux/mmc/sdio_func.h>
+#include <linux/pm_runtime.h>
+
+#define PREVENT_SDIO_HOST_FROM_SUSPEND
+
 static int dev_state_ev_handler(struct notifier_block *this,
 				unsigned long event, void *ptr);
 
@@ -375,9 +381,14 @@ static int linux_wlan_start_firmware(struct net_device *dev)
 	struct wilc_vif *vif;
 	struct wilc *wilc;
 	int ret = 0;
+	struct sdio_func *func;
 
 	vif = netdev_priv(dev);
 	wilc = vif->wilc;
+#ifdef PREVENT_SDIO_HOST_FROM_SUSPEND
+	func = dev_to_sdio_func(wilc->dev);
+	pm_runtime_get_sync(mmc_dev(func->card->host));
+#endif
 
 	ret = wilc_wlan_start(wilc);
 	if (ret < 0)
