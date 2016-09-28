@@ -720,7 +720,6 @@
 			can1: can@fc050000 {
 				pinctrl-names = "default";
 				pinctrl-0 = <&pinctrl_can1_default>;
-				status = "okay";
 			};
 		};
 	};
