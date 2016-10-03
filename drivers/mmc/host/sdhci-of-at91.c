@@ -29,6 +29,8 @@
 
 #include "sdhci-pltfm.h"
 
+#define SDMMC_MC1R	0x204
+#define		SDMMC_MC1R_FCD		BIT(7)
 #define SDMMC_CACR	0x230
 #define		SDMMC_CACR_CAPWREN	BIT(0)
 #define		SDMMC_CACR_KEY		(0x46 << 8)
@@ -85,10 +87,22 @@ static void sdhci_at91_set_clock(struct sdhci_host *host, unsigned int clock)
 	sdhci_writew(host, clk, SDHCI_CLOCK_CONTROL);
 }
 
+static void sdhci_at91_reset(struct sdhci_host *host, u8 mask)
+{
+	sdhci_reset(host, mask);
+
+	if (host->mmc->caps & MMC_CAP_NONREMOVABLE) {
+		u8 mc1r;
+		mc1r = readb(host->ioaddr + SDMMC_MC1R);
+		mc1r |= SDMMC_MC1R_FCD;
+		writeb(mc1r, host->ioaddr + SDMMC_MC1R);
+	}
+}
+
 static const struct sdhci_ops sdhci_at91_sama5d2_ops = {
 	.set_clock		= sdhci_at91_set_clock,
 	.set_bus_width		= sdhci_set_bus_width,
-	.reset			= sdhci_reset,
+	.reset			= sdhci_at91_reset,
 	.set_uhs_signaling	= sdhci_set_uhs_signaling,
 };
 
@@ -292,6 +306,26 @@ static int sdhci_at91_probe(struct platform_device *pdev)
 	    mmc_gpio_get_cd(host->mmc) < 0) {
 		host->mmc->caps |= MMC_CAP_NEEDS_POLL;
 		host->quirks &= ~SDHCI_QUIRK_BROKEN_CARD_DETECTION;
+	}
+
+	/*
+	 * If the device attached to the MMC bus is not removable, it is safer
+	 * to set the Force Card Detect bit. People often don't connect the
+	 * card detect signal and use this pin for another purpose. If the card
+	 * detect pin is not muxed to SDHCI controller, a default value is
+	 * used. This value can be different from a SoC revision to another
+	 * one. Problems come when this default value is not card present. To
+	 * avoid this case, if the device is non removable then the card
+	 * detection procedure using the SDMCC_CD signal is bypassed.
+	 * This bit is resetted when a software reset for all command is
+	 * performed so we need to implement our own reset function to set back
+	 * this bit.
+	 */
+	if (host->mmc->caps & MMC_CAP_NONREMOVABLE) {
+		u8 mc1r;
+		mc1r = readb(host->ioaddr + SDMMC_MC1R);
+		mc1r |= SDMMC_MC1R_FCD;
+		writeb(mc1r, host->ioaddr + SDMMC_MC1R);
 	}
 
 	pm_runtime_put_autosuspend(&pdev->dev);
