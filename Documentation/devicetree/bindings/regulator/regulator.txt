@@ -37,6 +37,11 @@ Optional properties:
 	  The set of possible operating modes depends on the capabilities of
 	  every hardware so the valid modes are documented on each regulator
 	  device tree binding document.
+	- regulator-allow-changes-at-runtime: runtime changes are allowed when
+	  the regulator does not support programming a suspend state that will
+	  be applied later on when the system is suspended.
+	  Applying changes at runtime can be dangerous, and you should only
+	  add this property if you know what you're doing.
 - regulator-initial-mode: initial operating mode. The set of possible operating
   modes depends on the capabilities of every hardware so each device binding
   documentation explains which values the regulator supports.
