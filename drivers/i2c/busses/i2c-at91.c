@@ -140,6 +140,12 @@ struct at91_twi_dev {
 	unsigned transfer_status;
 	struct i2c_adapter adapter;
 	unsigned twi_cwgr_reg;
+	struct {
+		u32 mmr;
+		u32 imr;
+		u32 fmr;
+		u32 fimr;
+	} cache;
 	struct at91_twi_pdata *pdata;
 	bool use_dma;
 	bool use_alt_cmd;
@@ -1172,6 +1178,15 @@ static int at91_twi_runtime_resume(struct device *dev)
 
 static int at91_twi_suspend_noirq(struct device *dev)
 {
+	struct at91_twi_dev *twi_dev = dev_get_drvdata(dev);
+
+	twi_dev->cache.mmr = at91_twi_read(twi_dev, AT91_TWI_MMR);
+	twi_dev->cache.imr = at91_twi_read(twi_dev, AT91_TWI_IMR);
+	if (twi_dev->fifo_size) {
+		twi_dev->cache.fmr = at91_twi_read(twi_dev, AT91_TWI_FMR);
+		twi_dev->cache.fimr = at91_twi_read(twi_dev, AT91_TWI_FIMR);
+	}
+
 	if (!pm_runtime_status_suspended(dev))
 		at91_twi_runtime_suspend(dev);
 
@@ -1180,6 +1195,7 @@ static int at91_twi_suspend_noirq(struct device *dev)
 
 static int at91_twi_resume_noirq(struct device *dev)
 {
+	struct at91_twi_dev *twi_dev = dev_get_drvdata(dev);
 	int ret;
 
 	if (!pm_runtime_status_suspended(dev)) {
@@ -1190,6 +1206,14 @@ static int at91_twi_resume_noirq(struct device *dev)
 
 	pm_runtime_mark_last_busy(dev);
 	pm_request_autosuspend(dev);
+
+	at91_init_twi_bus(twi_dev);
+	at91_twi_write(twi_dev, AT91_TWI_MMR, twi_dev->cache.mmr);
+	at91_twi_write(twi_dev, AT91_TWI_IER, twi_dev->cache.imr);
+	if (twi_dev->fifo_size) {
+		at91_twi_write(twi_dev, AT91_TWI_FMR, twi_dev->cache.fmr);
+		at91_twi_write(twi_dev, AT91_TWI_FIER, twi_dev->cache.fimr);
+	}
 
 	return 0;
 }
