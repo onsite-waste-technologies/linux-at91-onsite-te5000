@@ -60,12 +60,16 @@ enum regulator_active_discharge {
  * @mode: Operating mode during suspend.
  * @enabled: Enabled during suspend.
  * @disabled: Disabled during suspend.
+ * @allow_changes_at_runtime: Allow the core to call the ->set_mode() or
+ *			      ->set_voltage() directly if ->set_suspend_mode()
+ *			      or ->set_suspend_voltage() are missing.
  */
 struct regulator_state {
 	int uV;	/* suspend voltage */
 	unsigned int mode; /* suspend regulator operating mode */
 	int enabled; /* is regulator enabled in this suspend state */
 	int disabled; /* is the regulator disbled in this suspend state */
+	bool allow_changes_at_runtime;
 };
 
 /**
@@ -216,11 +220,17 @@ struct regulator_init_data {
 
 #ifdef CONFIG_REGULATOR
 void regulator_has_full_constraints(void);
+int regulator_suspend_begin(suspend_state_t state);
 int regulator_suspend_prepare(suspend_state_t state);
 int regulator_suspend_finish(void);
+void regulator_suspend_end(void);
 #else
 static inline void regulator_has_full_constraints(void)
 {
+}
+static inline int regulator_suspend_begin(suspend_state_t state)
+{
+	return 0;
 }
 static inline int regulator_suspend_prepare(suspend_state_t state)
 {
@@ -229,6 +239,9 @@ static inline int regulator_suspend_prepare(suspend_state_t state)
 static inline int regulator_suspend_finish(void)
 {
 	return 0;
+}
+static inline void regulator_suspend_end(void)
+{
 }
 #endif
 

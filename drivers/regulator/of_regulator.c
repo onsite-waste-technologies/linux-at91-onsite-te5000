@@ -163,6 +163,10 @@ static void of_get_regulation_constraints(struct device_node *np,
 					"regulator-suspend-microvolt", &pval))
 			suspend_state->uV = pval;
 
+		if (of_property_read_bool(suspend_np,
+					"regulator-allow-changes-at-runtime"))
+			suspend_state->allow_changes_at_runtime = true;
+
 		if (i == PM_SUSPEND_MEM)
 			constraints->initial_state = PM_SUSPEND_MEM;
 

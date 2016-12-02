@@ -18,6 +18,7 @@
 #include <linux/device.h>
 #include <linux/notifier.h>
 #include <linux/regulator/consumer.h>
+#include <linux/regulator/machine.h>
 
 struct regmap;
 struct regulator_dev;
@@ -384,6 +385,29 @@ struct regulator_config {
 };
 
 /*
+ * struct struct regulator_suspend_ctx
+ *
+ * The suspend context attached to a regulator device.
+ *
+ * This context is used to store the target regulato state which should be
+ * entered when the system is suspended.
+ * The regulator_suspend_begin() will make @target point to the appropriate
+ * suspent state, and the regulator driver is then responsible for calling
+ * regulator_apply_suspend_state() from its ->suspend() hook.
+ * regulator_apply_suspend_state() will save the current regulator state, and
+ * the driver can then restore this state at resume time by calling
+ * regulator_restore_runtime_state() from its ->resume() hook.
+ *
+ *
+ * @target: target state to apply on suspend
+ * @save: runtime state that should be restored at resume time
+ */
+struct regulator_suspend_ctx {
+	struct regulator_state *target;
+	struct regulator_state save;
+};
+
+/*
  * struct regulator_dev
  *
  * Voltage / Current regulator class device. One for each
@@ -414,6 +438,8 @@ struct regulator_dev {
 	struct regulator *supply;	/* for tree */
 	const char *supply_name;
 	struct regmap *regmap;
+
+	struct regulator_suspend_ctx suspend;
 
 	struct delayed_work disable_work;
 	int deferred_disables;
@@ -476,5 +502,8 @@ int regulator_get_bypass_regmap(struct regulator_dev *rdev, bool *enable);
 int regulator_set_active_discharge_regmap(struct regulator_dev *rdev,
 					  bool enable);
 void *regulator_get_init_drvdata(struct regulator_init_data *reg_init_data);
+
+int regulator_apply_suspend_state(struct regulator_dev *rdev);
+int regulator_restore_runtime_state(struct regulator_dev *rdev);
 
 #endif
