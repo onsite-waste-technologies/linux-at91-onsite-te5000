@@ -729,6 +729,207 @@ static int drms_uA_update(struct regulator_dev *rdev)
 	return err;
 }
 
+/**
+ * regulator_restore_runtime_state - restore the runtime state on a regulator
+ * @rdev: regulator device
+ *
+ * This function will restore the runtime state that was applied by
+ * regulator_apply_suspend_state() during the suspend sequence.
+ * It only restores things that were set at runtime (i.e. everything that was
+ * not configured with ->set_suspend_xx()). For everything that was set with
+ * ->set_suspend_xx(), we assume that the regulator will restore the runtime
+ * state by itself.
+ *
+ * This function should be called from the regulator driver ->resume() hook.
+ *
+ * This function returns 0 if it managed to restore the state, a negative
+ * error code otherwise.
+ */
+int regulator_restore_runtime_state(struct regulator_dev *rdev)
+{
+	struct regulator_state *save;
+	int ret;
+
+	save = &rdev->suspend.save;
+
+	if (save->enabled)
+		ret = rdev->desc->ops->enable(rdev);
+	else if (save->disabled)
+		ret = rdev->desc->ops->disable(rdev);
+	else
+		ret = 0;
+
+	if (ret < 0) {
+		rdev_err(rdev, "failed to enabled/disable\n");
+		return ret;
+	}
+
+	if (save->uV > 0) {
+		ret = _regulator_do_set_voltage(rdev, save->uV, save->uV);
+		if (ret < 0) {
+			rdev_err(rdev, "failed to set voltage\n");
+			return ret;
+		}
+	}
+
+	if (save->mode > 0) {
+		ret = rdev->desc->ops->set_mode(rdev, save->mode);
+		if (ret < 0) {
+			rdev_err(rdev, "failed to set mode\n");
+			return ret;
+		}
+	}
+
+	memset(&rdev->suspend.save, 0, sizeof(rdev->suspend.save));
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(regulator_restore_runtime_state);
+
+/**
+ * regulator_apply_suspend_state - apply the suspend state to a regulator
+ * @rdev: regulator device
+ *
+ * This function will apply the suspend pointed by rdev->suspend.target.
+ * If the regulator implements the ->set_suspend_xx() hooks, then these methods
+ * are called, and the regulator will not apply the new state directly, but
+ * instead store the new configuration internally and apply it afterwards after
+ * the system has been suspended.
+ * If the regulator does not support this 'program suspend state' feature, the
+ * core can apply the new setting at runtime, but this has to be explicitely
+ * requested (with the ->allow_changes_at_runtime flag) because it can be
+ * dangerous to do so.
+ *
+ * This function should be called from the regulator driver ->suspend() hook
+ * and after the platform has called regulator_suspend_begin() to properly set
+ * the rdev->suspend.target field.
+ *
+ * This function returns 0 if it managed to apply the new state, a negative
+ * error code otherwise.
+ */
+int regulator_apply_suspend_state(struct regulator_dev *rdev)
+{
+	struct regulator_state *target, *save;
+	const struct regulator_ops *ops = rdev->desc->ops;
+	int ret;
+
+	target = rdev->suspend.target;
+	save = &rdev->suspend.save;
+	memset(save, 0, sizeof(*save));
+
+	if (!target)
+		return 0;
+
+	if (target->enabled && target->disabled) {
+		rdev_err(rdev, "invalid configuration\n");
+		return -EINVAL;
+	}
+
+	/*
+	 * If the regulator supports configuring a suspend state that will be
+	 * applied afterward (->set_suspend_xx() hooks), use this feature.
+	 * Otherwise, if runtime modifications are allowed, save the current
+	 * state and use the regular methods to apply the suspend state.
+	 *
+	 * Note that we do not care saving the status when the
+	 * ->set_suspend_xx() methods are implemented because we assume the
+	 * regulator will automatically restore the runtime state when going
+	 * out of its suspend mode.
+	 */
+	if (target->enabled) {
+		if (ops->set_suspend_enable) {
+			ret = ops->set_suspend_enable(rdev);
+		} else if (target->allow_changes_at_runtime &&
+			   ops->enable) {
+			save->enabled = _regulator_is_enabled(rdev);
+			ret = rdev->desc->ops->enable(rdev);
+		} else {
+			ret = 0;
+		}
+	} else if (target->disabled) {
+		if (ops->set_suspend_disable) {
+			ret = ops->set_suspend_disable(rdev);
+		} else if (target->allow_changes_at_runtime &&
+			   ops->disable) {
+			save->disabled = !_regulator_is_enabled(rdev);
+			ret = rdev->desc->ops->disable(rdev);
+		} else {
+			ret = 0;
+		}
+	} else {
+		ret = 0;
+	}
+
+	if (ret < 0) {
+		rdev_err(rdev, "failed to enabled/disable\n");
+		return ret;
+	}
+
+	if (target->uV > 0) {
+		if (ops->set_suspend_voltage) {
+			ret = ops->set_suspend_voltage(rdev, target->uV);
+		} else if (target->allow_changes_at_runtime) {
+			ret = _regulator_get_voltage(rdev);
+			if (ret < 0) {
+				rdev_err(rdev, "failed to get current voltage\n");
+				goto err_restore;
+			}
+
+			save->uV = ret;
+
+			ret = _regulator_do_set_voltage(rdev, target->uV,
+							target->uV);
+		} else {
+			rdev_err(rdev,
+				 "suspend voltage specified, but no way to set it\n");
+			goto err_restore;
+		}
+
+		if (ret < 0) {
+			rdev_err(rdev, "failed to set voltage\n");
+			save->uV = 0;
+			goto err_restore;
+		}
+	}
+
+	if (target->mode > 0 && !rdev->desc->ops->set_suspend_mode &&
+	    rdev->desc->ops->set_mode) {
+		if (ops->set_suspend_mode) {
+			ret = ops->set_suspend_mode(rdev, target->mode);
+		} else if (target->allow_changes_at_runtime && ops->get_mode &&
+			   ops->set_mode) {
+			ret = ops->get_mode(rdev);
+			if (ret < 0) {
+				rdev_err(rdev, "failed to get mode\n");
+				goto err_restore;
+			}
+
+			save->mode = ret;
+
+			ret = ops->set_mode(rdev, target->mode);
+		} else {
+			rdev_err(rdev,
+				 "suspend mode specified, but no way to set it\n");
+			goto err_restore;
+		}
+
+		if (ret < 0) {
+			rdev_err(rdev, "failed to set mode\n");
+			save->mode = 0;
+			goto err_restore;
+		}
+	}
+
+
+	return 0;
+
+err_restore:
+	regulator_restore_runtime_state(rdev);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(regulator_apply_suspend_state);
+
 static int suspend_set_state(struct regulator_dev *rdev,
 	struct regulator_state *rstate)
 {
@@ -799,6 +1000,38 @@ static int suspend_prepare(struct regulator_dev *rdev, suspend_state_t state)
 	default:
 		return -EINVAL;
 	}
+}
+
+/* locks held by caller */
+static int suspend_begin(struct regulator_dev *rdev, suspend_state_t state)
+{
+	struct regulator_state *target;
+
+	if (!rdev->constraints)
+		return -EINVAL;
+
+	switch (state) {
+	case PM_SUSPEND_STANDBY:
+		target = &rdev->constraints->state_standby;
+		break;
+	case PM_SUSPEND_MEM:
+		target = &rdev->constraints->state_mem;
+		break;
+	case PM_SUSPEND_MAX:
+		target = &rdev->constraints->state_disk;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	rdev->suspend.target = target;
+	return 0;
+}
+
+static void suspend_end(struct regulator_dev *rdev)
+{
+	/* Reset the suspend state. */
+	memset(&rdev->suspend, 0, sizeof(rdev->suspend));
 }
 
 static void print_constraints(struct regulator_dev *rdev)
@@ -4138,6 +4371,64 @@ int regulator_suspend_prepare(suspend_state_t state)
 				     _regulator_suspend_prepare);
 }
 EXPORT_SYMBOL_GPL(regulator_suspend_prepare);
+
+static int _regulator_suspend_begin(struct device *dev, void *data)
+{
+	struct regulator_dev *rdev = dev_to_rdev(dev);
+	const suspend_state_t *state = data;
+	int ret;
+
+	mutex_lock(&rdev->mutex);
+	ret = suspend_begin(rdev, *state);
+	mutex_unlock(&rdev->mutex);
+
+	return ret;
+}
+
+/**
+ * regulator_suspend_begin - begin a system wide suspend sequence
+ * @state: system suspend state
+ *
+ * Assign rdev->suspend.target for each regulator device. This target state
+ * can then be used by regulator drivers in their suspend function to
+ * apply a suspend state.
+ * All they need to do is call regulator_apply_suspend_state() from their
+ * ->suspend() hook.
+ */
+int regulator_suspend_begin(suspend_state_t state)
+{
+	/* ON is handled by regulator active state */
+	if (state == PM_SUSPEND_ON)
+		return -EINVAL;
+
+	return class_for_each_device(&regulator_class, NULL, &state,
+				     _regulator_suspend_begin);
+}
+EXPORT_SYMBOL_GPL(regulator_suspend_begin);
+
+static int _regulator_suspend_end(struct device *dev, void *data)
+{
+	struct regulator_dev *rdev = dev_to_rdev(dev);
+
+	mutex_lock(&rdev->mutex);
+	suspend_end(rdev);
+	mutex_unlock(&rdev->mutex);
+
+	return 0;
+}
+
+/**
+ * regulator_suspend_end - end a suspend sequence
+ *
+ * Reset all regulators suspend state, either because the suspend sequence
+ * was aborted or because the system resumed from suspend.
+ */
+void regulator_suspend_end(void)
+{
+	class_for_each_device(&regulator_class, NULL, NULL,
+			      _regulator_suspend_end);
+}
+EXPORT_SYMBOL_GPL(regulator_suspend_end);
 
 static int _regulator_suspend_finish(struct device *dev, void *data)
 {
