@@ -796,6 +796,11 @@ struct macb_queue {
 	struct work_struct	tx_error_task;
 };
 
+struct macb_suspend_ctx {
+	u32 usrio;
+	u32 ncfgr;
+};
+
 struct macb {
 	void __iomem		*regs;
 	bool			native_io;
@@ -857,6 +862,9 @@ struct macb {
 	unsigned int		jumbo_max_len;
 
 	u32			wol;
+
+	/* Suspend context. */
+	struct macb_suspend_ctx suspend;
 };
 
 static inline bool macb_is_gem(struct macb *bp)
