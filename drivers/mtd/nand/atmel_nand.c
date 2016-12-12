@@ -2430,6 +2430,7 @@ static int atmel_nand_nfc_probe(struct platform_device *pdev)
 		if (ret)
 			return ret;
 	} else {
+		nfc->clk = NULL;
 		dev_warn(&pdev->dev, "NFC clock missing, update your Device Tree");
 	}
 
@@ -2443,8 +2444,7 @@ static int atmel_nand_nfc_remove(struct platform_device *pdev)
 {
 	struct atmel_nfc *nfc = &nand_nfc;
 
-	if (!IS_ERR(nfc->clk))
-		clk_disable_unprepare(nfc->clk);
+	clk_disable_unprepare(nfc->clk);
 
 	return 0;
 }
