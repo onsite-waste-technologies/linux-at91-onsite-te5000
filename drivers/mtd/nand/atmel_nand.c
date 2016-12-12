@@ -2117,6 +2117,37 @@ static int nfc_sram_init(struct mtd_info *mtd)
 	return 0;
 }
 
+static int atmel_nand_suspend(struct device *dev)
+{
+	return 0;
+}
+
+static int atmel_nand_resume(struct device *dev)
+{
+	struct atmel_nand_host *host = dev_get_drvdata(dev);
+	struct nand_chip *nand_chip = &host->nand_chip;
+	struct mtd_info *mtd = nand_to_mtd(nand_chip);
+	int ret;
+
+	/* Restore the PMECC config. */
+	if (nand_chip->ecc.mode == NAND_ECC_HW && host->has_pmecc)
+		atmel_pmecc_core_init(mtd);
+
+	/* Restore the nfc configuration register. */
+	if (host->nfc && host->nfc->use_nfc_sram) {
+		ret = nfc_sram_init(mtd);
+		if (ret) {
+			host->nfc->use_nfc_sram = false;
+			dev_err(host->dev, "Disable use nfc sram for data transfer.\n");
+		}
+	}
+
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(atmel_nand_pm_ops, atmel_nand_suspend,
+			 atmel_nand_resume);
+
 static struct platform_driver atmel_nand_nfc_driver;
 /*
  * Probe for the NAND device.
@@ -2387,6 +2418,30 @@ static const struct of_device_id atmel_nand_dt_ids[] = {
 
 MODULE_DEVICE_TABLE(of, atmel_nand_dt_ids);
 
+static int atmel_nand_nfc_suspend(struct device *dev)
+{
+	struct atmel_nfc *nfc = &nand_nfc;
+
+	clk_disable_unprepare(nfc->clk);
+
+	return 0;
+}
+
+static int atmel_nand_nfc_resume(struct device *dev)
+{
+	struct atmel_nfc *nfc = &nand_nfc;
+	int ret;
+
+	ret = clk_prepare_enable(nfc->clk);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(atmel_nand_nfc_pm_ops, atmel_nand_nfc_suspend,
+			 atmel_nand_nfc_resume);
+
 static int atmel_nand_nfc_probe(struct platform_device *pdev)
 {
 	struct atmel_nfc *nfc = &nand_nfc;
@@ -2459,6 +2514,7 @@ static struct platform_driver atmel_nand_nfc_driver = {
 	.driver = {
 		.name = "atmel_nand_nfc",
 		.of_match_table = of_match_ptr(atmel_nand_nfc_match),
+		.pm = &atmel_nand_nfc_pm_ops,
 	},
 	.probe = atmel_nand_nfc_probe,
 	.remove = atmel_nand_nfc_remove,
@@ -2470,6 +2526,7 @@ static struct platform_driver atmel_nand_driver = {
 	.driver		= {
 		.name	= "atmel_nand",
 		.of_match_table	= of_match_ptr(atmel_nand_dt_ids),
+		.pm = &atmel_nand_pm_ops,
 	},
 };
 
