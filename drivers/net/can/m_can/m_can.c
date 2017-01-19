@@ -1304,11 +1304,9 @@ static __maybe_unused int m_can_suspend(struct device *dev)
 	struct m_can_priv *priv = netdev_priv(ndev);
 
 	if (netif_running(ndev)) {
-		netif_stop_queue(ndev);
 		netif_device_detach(ndev);
+		m_can_close(ndev);
 	}
-
-	/* TODO: enter low power */
 
 	priv->can.state = CAN_STATE_SLEEPING;
 
@@ -1320,13 +1318,13 @@ static __maybe_unused int m_can_resume(struct device *dev)
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct m_can_priv *priv = netdev_priv(ndev);
 
-	/* TODO: exit low power */
+	m_can_init_ram(priv);
 
 	priv->can.state = CAN_STATE_ERROR_ACTIVE;
 
 	if (netif_running(ndev)) {
+		m_can_open(ndev);
 		netif_device_attach(ndev);
-		netif_start_queue(ndev);
 	}
 
 	return 0;
