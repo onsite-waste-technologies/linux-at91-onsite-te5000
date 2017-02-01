@@ -230,27 +230,6 @@ static void atmel_hlcdc_crtc_enable(struct drm_crtc *c)
 	crtc->enabled = true;
 }
 
-void atmel_hlcdc_crtc_suspend(struct drm_crtc *c)
-{
-	struct atmel_hlcdc_crtc *crtc = drm_crtc_to_atmel_hlcdc_crtc(c);
-
-	if (crtc->enabled) {
-		atmel_hlcdc_crtc_disable(c);
-		/* save enable state for resume */
-		crtc->enabled = true;
-	}
-}
-
-void atmel_hlcdc_crtc_resume(struct drm_crtc *c)
-{
-	struct atmel_hlcdc_crtc *crtc = drm_crtc_to_atmel_hlcdc_crtc(c);
-
-	if (crtc->enabled) {
-		crtc->enabled = false;
-		atmel_hlcdc_crtc_enable(c);
-	}
-}
-
 #define ATMEL_HLCDC_RGB444_OUTPUT	BIT(0)
 #define ATMEL_HLCDC_RGB565_OUTPUT	BIT(1)
 #define ATMEL_HLCDC_RGB666_OUTPUT	BIT(2)
