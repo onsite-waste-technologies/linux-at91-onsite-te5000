@@ -1851,7 +1851,7 @@ static irqreturn_t usba_udc_irq(int irq, void *devid)
 		 * but it's clearly harmless...
 		 */
 		if (!(usba_ep_readl(ep0, CFG) & USBA_EPT_MAPPED))
-			dev_dbg(&udc->pdev->dev,
+			dev_warn(&udc->pdev->dev,
 				 "ODD: EP0 configuration is invalid!\n");
 
 		/* Preallocate other endpoints */
@@ -1860,8 +1860,8 @@ static irqreturn_t usba_udc_irq(int irq, void *devid)
 			ep = &udc->usba_ep[i];
 			usba_ep_writel(ep, CFG, ep->ept_cfg);
 			if (!(usba_ep_readl(ep, CFG) & USBA_EPT_MAPPED))
-				dev_dbg(&udc->pdev->dev,
-				 "ODD: EP%d configuration is invalid!\n", i);
+				dev_warn(&udc->pdev->dev,
+					 "ODD: EP%d configuration is invalid!\n", i);
 		}
 	}
 
