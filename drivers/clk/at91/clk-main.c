@@ -658,7 +658,7 @@ static void pmc_resume(void)
 
 	for (i = 2; i < 64; i++) {
 		regmap_write(pmcreg, AT91_PMC_PCR, (i & AT91_PMC_PCR_PID_MASK));
-		regmap_write(pmcreg, AT91_PMC_PCR, pmc_cache.pcr[i]);
+		regmap_write(pmcreg, AT91_PMC_PCR, pmc_cache.pcr[i] | AT91_PMC_PCR_CMD);
 	}
 
 	if (pmc_cache.uckr & AT91_PMC_UPLLEN)
