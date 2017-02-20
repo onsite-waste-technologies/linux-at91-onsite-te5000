@@ -12,3 +12,55 @@ Examples:
 		compatible = "atmel,at91rm9200-pmc";
 		reg = <0xfffffc00 0x100>;
 	};
+
+PMC Fast Startup Signals
+
+The PMC Fast Start Signals are used as the wake up source to trigger the PMC
+to wake up the system from the ULP1 mode.
+
+required properties:
+- compatible: should be "atmel,sama5d2-pmc-fast-startup".
+
+optional properties:
+- atmel,wakeup-rtc-timer: boolean to enable RTC alarm wake-up.
+- atmel,wakeup-usb-resume: boolean to enable USB resume wake-up.
+- atmel,wakeup-sdmmc-cd: boolean to enable SDMMC card detect wake-up.
+- atmel,wakeup-rxlp-match: boolean to enable RXLP matching condition wake-up.
+- atmel,wakeup-acc-comparison: boolean to enable ACC comparison wake-up.
+
+The node contains child nodes for each wake-up input pin that the platform uses.
+
+Input nodes
+
+Required properties:
+- reg: should contain the wake-up input index [0 - 10], to enable
+  the corresponding wake-up input.
+
+Optional properties:
+- atmel,wakeup-active-high: boolean to declare the corresponding wake-up
+  input described by the child be active high.
+  The default is to be active low.
+
+Example:
+
+	pmc: pmc@f0014000 {
+		compatible = "atmel,sama5d2-pmc";
+		reg = <0xf0014000 0x160>;
+
+		pmc_fast_restart {
+			compatible = "atmel,sama5d2-pmc-fast-startup";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			atmel,wakeup-rtc-timer;
+
+			wkpin: input@0 {
+				reg = <0>;
+			};
+
+			gmac_wol: input@10 {
+				reg = <10>;
+				atmel,wakeup-active-high;
+			};
+		};
+	};
