@@ -1,5 +1,5 @@
 /*
- * at91-sama5d4_xplained.dts - Device Tree file for SAMA5D4 Xplained board
+ * Device Tree file for the SAMA5D4 Xplained board with PDA7 screen
  *
  *  Copyright (C) 2015 Atmel,
  *                2015 Josh Wu <josh.wu@atmel.com>
@@ -44,9 +44,10 @@
  */
 /dts-v1/;
 #include "sama5d4.dtsi"
+#include "at91-sama5d4_xplained_dm_pda7.dtsi"
 
 / {
-	model = "Atmel SAMA5D4 Xplained";
+	model = "Atmel SAMA5D4 Xplained TM70xx";
 	compatible = "atmel,sama5d4-xplained", "atmel,sama5d4", "atmel,sama5";
 
 	chosen {
@@ -69,12 +70,6 @@
 
 	ahb {
 		apb {
-			uart0: serial@f8004000 {
-				atmel,use-dma-rx;
-				atmel,use-dma-tx;
-				status = "okay";
-			};
-
 			spi0: spi@f8010000 {
 				cs-gpios = <&pioC 3 0>, <0>, <0>, <0>;
 				status = "okay";
@@ -168,6 +163,10 @@
 			};
 		};
 
+		vdec0: vdec@00300000 {
+			status = "okay";
+		};
+
 		usb0: gadget@00400000 {
 			atmel,vbus-gpio = <&pioE 31 GPIO_ACTIVE_HIGH>;
 			pinctrl-names = "default";
@@ -258,7 +257,7 @@
 		};
 	};
 
-	vcc_3v3_reg: fixedregulator_3v3 {
+	vcc_3v3_reg: fixedregulator@0 {
 		compatible = "regulator-fixed";
 		regulator-name = "VCC 3V3";
 		regulator-min-microvolt = <3300000>;
@@ -267,7 +266,7 @@
 		regulator-always-on;
 	};
 
-	vcc_mmc1_reg: fixedregulator_mmc1 {
+	vcc_mmc1_reg: fixedregulator@1 {
 		compatible = "regulator-fixed";
 		gpio = <&pioE 4 GPIO_ACTIVE_LOW>;
 		regulator-name = "VDD MCI1";

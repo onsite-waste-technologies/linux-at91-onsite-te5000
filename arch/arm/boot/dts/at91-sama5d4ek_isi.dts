@@ -1,8 +1,9 @@
 /*
- * at91-sama5d2_xplained.dts - Device Tree file for SAMA5D2 Xplained board
+ * at91-sama5d4ek_isi.dts - Device Tree file for SAMA5D4 Evaluation Kit
+ *                          with ov264x sensor
  *
- *  Copyright (C) 2015 Atmel,
- *                2015 Nicolas Ferre <nicolas.ferre@atmel.com>
+ *  Copyright (C) 2016 Atmel,
+ *                2016 Cyrille Pitchen <cyrille.pitchen@atmel.com>
  *
  * This file is dual-licensed: you can use it either under the terms
  * of the GPL or the X11 license, at your option. Note that this dual
@@ -42,21 +43,72 @@
  *     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  *     OTHER DEALINGS IN THE SOFTWARE.
  */
-/dts-v1/;
-#include "at91-sama5d2_xplained_common.dtsi"
+#include "at91-sama5d4ek.dts"
 
 / {
-	model = "Atmel SAMA5D2 Xplained";
-	compatible = "atmel,sama5d2-xplained", "atmel,sama5d2", "atmel,sama5";
-
 	ahb {
 		apb {
-			can0: can@f8054000 {
-				status = "okay";
-			};
+			pinctrl@fc06a000 {
+				board {
+					pinctrl_pck1_as_isi_mck: pck1_as_isi_mck-0 {
+						atmel,pins =
+							<AT91_PIOC  4 AT91_PERIPH_C AT91_PINCTRL_NONE>; /* PC4 periph C ISI_MCK */
+					};
 
-			can1: can@fc050000 {
-				status = "okay";
+					pinctrl_sensor_power: sensor_power {
+						atmel,pins =
+							<AT91_PIOB  5 AT91_PERIPH_GPIO AT91_PINCTRL_NONE>; /* PB5 gpio */
+					};
+
+					pinctrl_sensor_reset: sensor_reset {
+						atmel,pins =
+							<AT91_PIOB 11 AT91_PERIPH_GPIO AT91_PINCTRL_NONE>; /* PB11 gpio */
+					};
+				};
+			};
+		};
+	};
+};
+
+&usart2 {
+	status = "disabled";
+};
+
+&spi0 {
+	status = "disabled";
+};
+
+&isi {
+	status = "okay";
+
+	port {
+		isi_0: endpoint@0 {
+			remote-endpoint = <&ov2640_0>;
+			bus-width = <8>;
+			vsync-active = <1>;
+			hsync-active = <1>;
+		};
+	};
+};
+
+&i2c0 {
+	ov2640: camera@0x30 {
+		compatible = "ovti,ov2640";
+		reg = <0x30>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_pck1_as_isi_mck &pinctrl_sensor_power &pinctrl_sensor_reset>;
+		resetb-gpios = <&pioB 11 GPIO_ACTIVE_LOW>;
+		pwdn-gpios = <&pioB 5 GPIO_ACTIVE_HIGH>;
+		/* use pck1 for the master clock of ov2640 */
+		clocks = <&pck1>;
+		clock-names = "xvclk";
+		assigned-clocks = <&pck1>;
+		assigned-clock-rates = <25000000>;
+
+		port {
+			ov2640_0: endpoint {
+				remote-endpoint = <&isi_0>;
+				bus-width = <8>;
 			};
 		};
 	};
