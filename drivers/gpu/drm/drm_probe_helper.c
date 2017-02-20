@@ -113,7 +113,7 @@ static int drm_helper_probe_add_cmdline_mode(struct drm_connector *connector)
 	return 1;
 }
 
-#define DRM_OUTPUT_POLL_PERIOD (10*HZ)
+#define DRM_OUTPUT_POLL_PERIOD (4*HZ)
 /**
  * drm_kms_helper_poll_enable_locked - re-enable output polling.
  * @dev: drm_device

@@ -26,6 +26,7 @@
 #include <linux/pm_runtime.h>
 
 #include "atmel_hlcdc_dc.h"
+#include <drm/atmel_drm.h>
 
 #define ATMEL_HLCDC_LAYER_IRQS_OFFSET		8
 
@@ -757,6 +758,41 @@ static const struct file_operations fops = {
 	.mmap               = drm_gem_cma_mmap,
 };
 
+/*
+ioctl to export the physical address of GEM to user space for
+video decoder
+*/
+int atmel_drm_gem_get_ioctl(struct drm_device *drm, void *data,
+				      struct drm_file *file_priv)
+{
+	struct drm_gem_object *gem_obj;
+	struct drm_gem_cma_object *cma_obj;
+	struct drm_mode_map_dumb *args = data;
+
+	mutex_lock(&drm->struct_mutex);
+
+	gem_obj = drm_gem_object_lookup(file_priv, args->handle);
+	if (!gem_obj) {
+		dev_err(drm->dev, "failed to lookup gem object\n");
+		mutex_unlock(&drm->struct_mutex);
+		return -EINVAL;
+	}
+
+	cma_obj = to_drm_gem_cma_obj(gem_obj);
+	args->offset = (__u64)cma_obj->paddr;
+
+	drm_gem_object_unreference(gem_obj);
+
+	mutex_unlock(&drm->struct_mutex);
+
+	return 0;
+}
+static const struct drm_ioctl_desc atmel_ioctls[] = {
+	DRM_IOCTL_DEF_DRV(ATMEL_GEM_GET, atmel_drm_gem_get_ioctl,
+			DRM_CONTROL_ALLOW|DRM_UNLOCKED),
+};
+
+
 static struct drm_driver atmel_hlcdc_dc_driver = {
 	.driver_features = DRIVER_HAVE_IRQ | DRIVER_GEM |
 			   DRIVER_MODESET | DRIVER_PRIME |
@@ -783,6 +819,8 @@ static struct drm_driver atmel_hlcdc_dc_driver = {
 	.dumb_create = drm_gem_cma_dumb_create,
 	.dumb_map_offset = drm_gem_cma_dumb_map_offset,
 	.dumb_destroy = drm_gem_dumb_destroy,
+	.ioctls	= atmel_ioctls,
+	.num_ioctls= ARRAY_SIZE(atmel_ioctls),
 	.fops = &fops,
 	.name = "atmel-hlcdc",
 	.desc = "Atmel HLCD Controller DRM",
@@ -808,6 +846,7 @@ static int atmel_hlcdc_dc_drm_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_unload;
 
+	dev_info(ddev->dev, "DRM device successfully registered\n");
 	return 0;
 
 err_unload:
