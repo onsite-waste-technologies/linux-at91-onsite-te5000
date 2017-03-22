@@ -1758,7 +1758,9 @@ static void atmel_get_ip_name(struct uart_port *port)
 
 	/*
 	 * Only USART devices from at91sam9260 SOC implement fractional
-	 * baudrate.
+	 * baudrate. It is available for all asynchronous modes, with the
+	 * following restriction: the sampling clock's duty cycle is not
+	 * constant.
 	 */
 	atmel_port->has_frac_baudrate = false;
 	atmel_port->has_hw_timer = false;
@@ -1938,6 +1940,11 @@ static void atmel_flush_buffer(struct uart_port *port)
 		atmel_uart_writel(port, ATMEL_PDC_TCR, 0);
 		atmel_port->pdc_tx.ofs = 0;
 	}
+	/*
+	 * in uart_flush_buffer(), the xmit circular buffer has just
+	 * been cleared, so we have to reset tx_len accordingly.
+	 */
+	atmel_port->tx_len = 0;
 }
 
 /*
@@ -2202,8 +2209,7 @@ static void atmel_set_termios(struct uart_port *port, struct ktermios *termios,
 	 * then
 	 * 8 CD + FP = selected clock / (2 * baudrate)
 	 */
-	if (atmel_port->has_frac_baudrate &&
-	    (mode & ATMEL_US_USMODE) == ATMEL_US_USMODE_NORMAL) {
+	if (atmel_port->has_frac_baudrate) {
 		div = DIV_ROUND_CLOSEST(port->uartclk, baud * 2);
 		cd = div >> 3;
 		fp = div & ATMEL_US_FP_MASK;
@@ -2470,6 +2476,9 @@ static void atmel_console_write(struct console *co, const char *s, u_int count)
 	/* Store PDC transmit status and disable it */
 	pdc_tx = atmel_uart_readl(port, ATMEL_PDC_PTSR) & ATMEL_PDC_TXTEN;
 	atmel_uart_writel(port, ATMEL_PDC_PTCR, ATMEL_PDC_TXTDIS);
+
+	/* Make sure that tx path is actually able to send characters */
+	atmel_uart_writel(port, ATMEL_US_CR, ATMEL_US_TXEN);
 
 	uart_console_write(port, s, count, atmel_console_putchar);
 
