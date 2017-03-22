@@ -249,6 +249,18 @@ static void spi_nor_set_4byte_opcodes(struct spi_nor *nor,
 	nor->program_opcode = spi_nor_convert_3to4_program(nor->program_opcode);
 	nor->erase_opcode = spi_nor_convert_3to4_erase(nor->erase_opcode);
 
+	if (!spi_nor_has_uniform_erase(nor)) {
+		struct spi_nor_erase_map *map = &nor->erase_map;
+		struct spi_nor_erase_command *cmd;
+		int i;
+
+		for (i = 0; i < SNOR_CMD_ERASE_MAX; i++) {
+			cmd = &map->commands[i];
+
+			cmd->opcode = spi_nor_convert_3to4_erase(cmd->opcode);
+		}
+	}
+
 	nor->flags |= SNOR_F_4B_OPCODES;
 }
 
@@ -406,6 +418,132 @@ static int spi_nor_erase_sector(struct spi_nor *nor, u32 addr)
 	return nor->write_reg(nor, nor->erase_opcode, buf, nor->addr_width);
 }
 
+static inline u64
+spi_nor_div_by_erase_size(const struct spi_nor_erase_command *cmd,
+			  u64 dividend, u32 *remainder)
+{
+	if (likely(cmd->size_shift)) {
+		*remainder = (u32)dividend & cmd->size_mask;
+		return dividend >> cmd->size_shift;
+	}
+
+	return div_u64_rem(dividend, cmd->size, remainder);
+}
+
+static bool
+spi_nor_test_erase_region(struct spi_nor *nor, u64 addr, u32 len,
+			  const struct spi_nor_erase_region *region,
+			  const struct spi_nor_erase_command **cmd)
+{
+	const struct spi_nor_erase_map *map = &nor->erase_map;
+	const struct spi_nor_erase_command *best_cmd = NULL;
+	const struct spi_nor_erase_command *tested_cmd;
+	u64 region_start, region_end, cmd_mask;
+	u32 rem;
+	int i;
+
+	region_start = region->offset & ~SNOR_CMD_ERASE_MASK;
+	region_end = region_start + region->size;
+
+	cmd_mask = region->offset & SNOR_CMD_ERASE_MASK;
+	for (i = 0; i < SNOR_CMD_ERASE_MAX; i++) {
+		/* Does the erase region support the tested erase command? */
+		if (!(cmd_mask & BIT(i)))
+			continue;
+
+		tested_cmd = &map->commands[i];
+
+		/* Don't erase more than what the user has asked for. */
+		if (tested_cmd->size > len)
+			continue;
+
+		/* 'addr' must be aligned to the erase size. */
+		spi_nor_div_by_erase_size(tested_cmd, addr, &rem);
+		if (rem)
+			continue;
+
+		/*
+		 * 'addr' must be inside the region.
+		 * Erase regions may overlap, so compute the actual start offset
+		 * of this erase region based on the size of the tested erase
+		 * command.
+		 */
+		spi_nor_div_by_erase_size(tested_cmd, region_start, &rem);
+		if (addr < (region_start - rem) || region_end <= addr)
+			continue;
+
+		/*
+		 * The tested erase size is valid but we still need to check
+		 * whether it is better than the current best erase command.
+		 */
+		if (!best_cmd || best_cmd->size < tested_cmd->size)
+			best_cmd = tested_cmd;
+	}
+
+	*cmd = best_cmd;
+	return (best_cmd != NULL);
+}
+
+static bool
+spi_nor_find_erase_region(struct spi_nor *nor, u64 addr, u32 len,
+			  const struct spi_nor_erase_region **region,
+			  const struct spi_nor_erase_command **cmd)
+{
+	const struct spi_nor_erase_map *map = &nor->erase_map;
+	const struct spi_nor_erase_region *best_region = NULL;
+	const struct spi_nor_erase_command *best_cmd = NULL;
+	int i;
+
+	for (i = 0; i < map->num_regions; i++) {
+		const struct spi_nor_erase_command *tested_cmd = NULL;
+
+		if (!spi_nor_test_erase_region(nor, addr, len, &map->regions[i],
+					       &tested_cmd))
+			continue;
+
+		if (!best_cmd || best_cmd->size < tested_cmd->size) {
+			best_region = &map->regions[i];
+			best_cmd = tested_cmd;
+		}
+	}
+
+	*region = best_region;
+	*cmd = best_cmd;
+	return (best_cmd != NULL);
+}
+
+static int spi_nor_erase_multi_sectors(struct spi_nor *nor, u32 addr, u32 len)
+{
+	const struct spi_nor_erase_region *region;
+	const struct spi_nor_erase_command *cmd;
+	u64 region_start, region_end;
+	int ret;
+
+	while (len) {
+		if (!spi_nor_find_erase_region(nor, addr, len, &region, &cmd))
+			return -EINVAL;
+
+		nor->erase_opcode = cmd->opcode;
+
+		region_start = region->offset & ~SNOR_CMD_ERASE_MASK;
+		region_end = region_start + region->size;
+		while (len && (u64)addr < region_end) {
+			ret = spi_nor_erase_sector(nor, addr);
+			if (ret)
+				return ret;
+
+			addr += cmd->size;
+			len -= cmd->size;
+
+			ret = spi_nor_wait_till_ready(nor);
+			if (ret)
+				return ret;
+		}
+	}
+
+	return 0;
+}
+
 /*
  * Erase an address range on the nor chip.  The address range may extend
  * one or more erase sectors.  Return an error is there is a problem erasing.
@@ -420,9 +558,11 @@ static int spi_nor_erase(struct mtd_info *mtd, struct erase_info *instr)
 	dev_dbg(nor->dev, "at 0x%llx, len %lld\n", (long long)instr->addr,
 			(long long)instr->len);
 
-	div_u64_rem(instr->len, mtd->erasesize, &rem);
-	if (rem)
-		return -EINVAL;
+	if (likely(spi_nor_has_uniform_erase(nor))) {
+		div_u64_rem(instr->len, mtd->erasesize, &rem);
+		if (rem)
+			return -EINVAL;
+	}
 
 	addr = instr->addr;
 	len = instr->len;
@@ -461,7 +601,7 @@ static int spi_nor_erase(struct mtd_info *mtd, struct erase_info *instr)
 	 */
 
 	/* "sector"-at-a-time erase */
-	} else {
+	} else if (likely(spi_nor_has_uniform_erase(nor))) {
 		while (len) {
 			write_enable(nor);
 
@@ -476,6 +616,12 @@ static int spi_nor_erase(struct mtd_info *mtd, struct erase_info *instr)
 			if (ret)
 				goto erase_err;
 		}
+
+	/* erase multiple sectors */
+	} else {
+		ret = spi_nor_erase_multi_sectors(nor, addr, len);
+		if (ret)
+			goto erase_err;
 	}
 
 	write_disable(nor);
@@ -1429,10 +1575,38 @@ spi_nor_set_pp_settings(struct spi_nor_pp_command *pp,
 	pp->proto = proto;
 }
 
+static inline void
+spi_nor_set_erase_command(struct spi_nor_erase_command *cmd,
+			  u32 size, u8 opcode)
+{
+	cmd->size = size;
+	cmd->opcode = opcode;
+
+	if (is_power_of_2(cmd->size))
+		cmd->size_shift = ffs(cmd->size) - 1;
+	else
+		cmd->size_shift = 0;
+
+	cmd->size_mask = (1 << cmd->size_shift) - 1;
+}
+
+static inline void
+spi_nor_init_uniform_erase_map(struct spi_nor_erase_map *map,
+			       u32 cmd_mask, u64 flash_size)
+{
+	map->num_regions = 1;
+	map->regions = &map->uniform_region;
+	map->uniform_region.offset = SNOR_CMD_ERASE_OFFSET(cmd_mask, 0);
+	map->uniform_region.size = flash_size;
+}
+
 static int spi_nor_init_params(struct spi_nor *nor,
 			       const struct flash_info *info,
 			       struct spi_nor_flash_parameter *params)
 {
+	struct spi_nor_erase_map *map = &nor->erase_map;
+	u32 erase_mask = 0;
+
 	/* Set legacy flash parameters as default. */
 	memset(params, 0, sizeof(*params));
 
@@ -1468,6 +1642,21 @@ static int spi_nor_init_params(struct spi_nor *nor,
 	params->hwcaps.mask |= SNOR_HWCAPS_PP;
 	spi_nor_set_pp_settings(&params->page_programs[SNOR_CMD_PP],
 				SPINOR_OP_PP, SNOR_PROTO_1_1_1);
+
+	/* Sector Erase settings. */
+	erase_mask |= BIT(0);
+	spi_nor_set_erase_command(&map->commands[0],
+				  info->sector_size, SPINOR_OP_SE);
+	if (info->flags & SECT_4K_PMC) {
+		erase_mask |= BIT(1);
+		spi_nor_set_erase_command(&map->commands[1],
+					  4096u, SPINOR_OP_BE_4K_PMC);
+	} else if (info->flags & SECT_4K) {
+		erase_mask |= BIT(1);
+		spi_nor_set_erase_command(&map->commands[1],
+					  4096u, SPINOR_OP_BE_4K);
+	}
+	spi_nor_init_uniform_erase_map(map, erase_mask, params->size);
 
 	/* Select the procedure to set the Quad Enable bit. */
 	if (params->hwcaps.mask & (SNOR_HWCAPS_READ_QUAD |
@@ -1572,25 +1761,177 @@ static int spi_nor_select_pp(struct spi_nor *nor,
 	return 0;
 }
 
+static bool spi_nor_find_uniform_erase(const struct spi_nor *nor,
+				       const struct flash_info *info,
+				       u32 wanted_size,
+				       const struct spi_nor_erase_command **cmd)
+{
+	const struct spi_nor_erase_map *map = &nor->erase_map;
+	const struct spi_nor_erase_command *tested_cmd;
+	const struct spi_nor_erase_region *region;
+	const struct mtd_info *mtd = &nor->mtd;
+	u64 pos, region_start, region_end;
+	int cidx, ridx;
+	u32 rem;
+
+	/* Try all erase commands to find the best one. */
+	*cmd = NULL;
+	for (cidx = 0; cidx < SNOR_CMD_ERASE_MAX; cidx++) {
+		tested_cmd = &map->commands[cidx];
+
+		/* The SPI flash size must be a multiple of the erase size. */
+		spi_nor_div_by_erase_size(tested_cmd, mtd->size, &rem);
+		if (rem)
+			continue;
+
+		/*
+		 * Walk through regions to check whether the whole memory can be
+		 * erased using only the tested erase command.
+		 */
+		pos = 0;
+		while (pos < mtd->size) {
+			for (ridx = 0; ridx < map->num_regions; ridx++) {
+				region = &map->regions[ridx];
+
+				/* The region must support the erase command. */
+				if (!(region->offset & BIT(cidx)))
+					continue;
+
+				/*
+				 * Compute the actual start and end offsets of
+				 * region based on the erase size.
+				 */
+				region_start = region->offset;
+				region_start &= ~SNOR_CMD_ERASE_MASK;
+				region_end = region_start + region->size;
+
+				spi_nor_div_by_erase_size(tested_cmd,
+							  region_start,
+							  &rem);
+				region_start -= rem;
+
+				spi_nor_div_by_erase_size(tested_cmd,
+							  region_end,
+							  &rem);
+				if (rem)
+					region_end += tested_cmd->size - rem;
+
+				/*
+				 * The current position must be the start offset
+				 * of the region.
+				 */
+				if (region_start == pos) {
+					/* Keep walking through regions. */
+					pos = region_end;
+					break;
+				}
+			}
+
+			/* No region found. */
+			if (ridx == map->num_regions)
+				break;
+		}
+
+		/*
+		 * If we can't erase the whole memory using only the current
+		 * erase command, stop here and try the next supported erase
+		 * command.
+		 */
+		if (pos != mtd->size)
+			continue;
+
+		/*
+		 * If the current erase size is the one, stop here:
+		 * we have found the right uniform Sector Erase command.
+		 */
+		if (tested_cmd->size == wanted_size) {
+			*cmd = tested_cmd;
+			break;
+		}
+
+		/*
+		 * Otherwise, the current erase size is still a valid canditate:
+		 * we select the first valid candidate unless we find the Sector
+		 * Erase command for an erase size of 'info->sector_size'.
+		 */
+		if (!(*cmd) || tested_cmd->size == info->sector_size)
+			*cmd = tested_cmd;
+	}
+
+	return (*cmd != NULL);
+}
+
 static int spi_nor_select_erase(struct spi_nor *nor,
 				const struct flash_info *info)
 {
+	struct spi_nor_erase_map *map = &nor->erase_map;
+	const struct spi_nor_erase_command *cmd = NULL;
+	u32 wanted_size = info->sector_size;
 	struct mtd_info *mtd = &nor->mtd;
+	bool is_uniform = false;
+	int i;
 
+	/*
+	 * The previous implementation handling Sector Erase commands assumed
+	 * that the SPI flash memory has an uniform layout then used only one
+	 * of the supported erase sizes for all Sector Erase commands.
+	 * So to be backward compatible, the new implementation also tries to
+	 * manage the SPI flash memory as uniform with a single erase sector
+	 * size, when possible.
+	 */
 #ifdef CONFIG_MTD_SPI_NOR_USE_4K_SECTORS
 	/* prefer "small sector" erase if possible */
-	if (info->flags & SECT_4K) {
-		nor->erase_opcode = SPINOR_OP_BE_4K;
-		mtd->erasesize = 4096;
-	} else if (info->flags & SECT_4K_PMC) {
-		nor->erase_opcode = SPINOR_OP_BE_4K_PMC;
-		mtd->erasesize = 4096;
-	} else
+	wanted_size = 4096u;
 #endif
-	{
-		nor->erase_opcode = SPINOR_OP_SE;
-		mtd->erasesize = info->sector_size;
+
+	if (spi_nor_has_uniform_erase(nor)) {
+		/* The SPI flash memory is already known as being uniform. */
+		cmd = NULL;
+		for (i = 0; i < SNOR_CMD_ERASE_MAX; i++) {
+			if (!(map->uniform_region.offset & BIT(i)))
+				continue;
+
+			if (map->commands[i].size == wanted_size) {
+				cmd = &map->commands[i];
+				break;
+			}
+			if (!cmd || map->commands[i].size == info->sector_size)
+				cmd = &map->commands[i];
+		}
+
+		if (!cmd || !cmd->size)
+			return -EINVAL;
+
+		/* Disable all other Sector Erase commands. */
+		map->uniform_region.offset &= ~SNOR_CMD_ERASE_MASK;
+		map->uniform_region.offset |= BIT(cmd - map->commands);
+		is_uniform = true;
+	} else if (spi_nor_find_uniform_erase(nor, info, wanted_size, &cmd)) {
+		/* The SPI flash memory can be managed as an uniform one. */
+		spi_nor_init_uniform_erase_map(map, BIT(cmd - map->commands),
+					       mtd->size);
+		is_uniform = true;
 	}
+
+	if (is_uniform) {
+		/* Set the Sector Erase opcode and the associated size. */
+		nor->erase_opcode = cmd->opcode;
+		mtd->erasesize = cmd->size;
+		return 0;
+	}
+
+	/*
+	 * For non-uniform SPI flash memory, set mtd->erasesize to the
+	 * maximum erase sector size. No need to set nor->erase_opcode.
+	 */
+	cmd = NULL;
+	for (i = 0; i < SNOR_CMD_ERASE_MAX; i++)
+		if (!cmd || map->commands[i].size > cmd->size)
+			cmd = &map->commands[i];
+	if (!cmd || !cmd->size)
+		return -EINVAL;
+
+	mtd->erasesize = cmd->size;
 	return 0;
 }
 
