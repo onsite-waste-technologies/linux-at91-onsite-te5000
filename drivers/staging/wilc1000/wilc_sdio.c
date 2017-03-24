@@ -73,7 +73,7 @@ static int wilc_sdio_cmd52(struct wilc *wilc, struct sdio_cmd52 *cmd)
 	sdio_release_host(func);
 
 	if (ret)
-		dev_err(&func->dev, "wilc_sdio_cmd52..failed, err(%d)\n", ret);
+		dev_err(&func->dev, "%s..failed, err(%d)\n", __func__, ret);
 	return ret;
 }
 
@@ -102,7 +102,7 @@ static int wilc_sdio_cmd53(struct wilc *wilc, struct sdio_cmd53 *cmd)
 	sdio_release_host(func);
 
 	if (ret)
-		dev_err(&func->dev, "wilc_sdio_cmd53..failed, err(%d)\n", ret);
+		dev_err(&func->dev, "%s..failed, err(%d)\n", __func__,  ret);
 
 	return ret;
 }
