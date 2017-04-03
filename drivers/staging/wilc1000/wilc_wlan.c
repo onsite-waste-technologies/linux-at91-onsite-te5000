@@ -477,6 +477,8 @@ int wilc_wlan_txq_add_net_pkt(struct net_device *dev, void *priv, u8 *buffer,
 	struct txq_entry_t *tqe;
 	struct wilc_vif *vif = netdev_priv(dev);
 	struct wilc *wilc;
+	u8 q_num;
+	u16 q_limit[NQUEUES] = {0, 0, 0, 0};
 
 	wilc = vif->wilc;
 
@@ -493,10 +495,28 @@ int wilc_wlan_txq_add_net_pkt(struct net_device *dev, void *priv, u8 *buffer,
 	tqe->tx_complete_func = func;
 	tqe->priv = priv;
 
-	tqe->tcp_pending_ack_idx = NOT_TCP_ACK;
-	if (enabled)
-		tcp_process(dev, tqe);
-	wilc_wlan_txq_add_to_tail(dev, tqe);
+	q_num = ac_classify(wilc, tqe);
+	if (ac_change(wilc, &q_num)) {
+		netdev_dbg(dev, "No suitable non-ACM queue\n");
+		return 0;
+	}
+	ac_q_limit(q_num, q_limit);
+
+	if ((q_num == AC_VO_Q && wilc->txq[q_num].count <= q_limit[AC_VO_Q]) ||
+	    (q_num == AC_VI_Q && wilc->txq[q_num].count <= q_limit[AC_VI_Q]) ||
+	    (q_num == AC_BE_Q && wilc->txq[q_num].count <= q_limit[AC_BE_Q]) ||
+	    (q_num == AC_BK_Q && wilc->txq[q_num].count <= q_limit[AC_BK_Q])) {
+		tqe->tcp_pending_ack_idx = NOT_TCP_ACK;
+		if (enabled)
+			tcp_process(dev, tqe);
+		wilc_wlan_txq_add_to_tail(dev, tqe);
+	} else {
+		tqe->status = 0;
+		if (tqe->tx_complete_func)
+			tqe->tx_complete_func(tqe->priv, tqe->status);
+		kfree(tqe);
+	}
+
 	return wilc->txq_entries;
 }
 
