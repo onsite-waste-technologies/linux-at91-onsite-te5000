@@ -375,6 +375,57 @@ static inline void ac_q_limit(u8 ac, u16 *q_limit)
 				      sum) + 1;
 }
 
+static inline u8 ac_classify(struct wilc *wilc, struct txq_entry_t *tqe)
+{
+	u8 *eth_hdr_ptr;
+	u8 *buffer = tqe->buffer;
+	u8 ac;
+	u16 h_proto;
+
+	spin_lock_irqsave(&wilc->txq_spinlock, wilc->txq_spinlock_flags);
+
+	eth_hdr_ptr = &buffer[0];
+	h_proto = ntohs(*((unsigned short *)&eth_hdr_ptr[12]));
+	if (h_proto == ETH_P_IP) {
+		u8 *ip_hdr_ptr;
+		u32 IHL, DSCP;
+
+		ip_hdr_ptr = &buffer[ETHERNET_HDR_LEN];
+		IHL = (ip_hdr_ptr[0] & 0xf) << 2;
+		DSCP = (ip_hdr_ptr[1] & 0xfc);
+
+		switch (DSCP) {
+		case 0x20:
+		case 0x40:
+		case 0x08:
+			ac = AC_BK_Q;
+			break;
+		case 0x80:
+		case 0xA0:
+		case 0x28:
+			ac = AC_VI_Q;
+			break;
+		case 0xC0:
+		case 0xd0:
+		case 0xE0:
+		case 0x88:
+		case 0xB8:
+			ac = AC_VO_Q;
+			break;
+		default:
+			ac = AC_BE_Q;
+			break;
+		}
+	} else {
+		ac  = AC_BE_Q;
+	}
+
+	tqe->q_num = ac;
+	spin_unlock_irqrestore(&wilc->txq_spinlock, wilc->txq_spinlock_flags);
+
+	return ac;
+}
+
 int wilc_wlan_txq_add_net_pkt(struct net_device *dev, void *priv, u8 *buffer,
 			      u32 buffer_size, wilc_tx_complete_func_t func)
 {
