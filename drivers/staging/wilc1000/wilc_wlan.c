@@ -20,21 +20,23 @@ static inline void release_bus(struct wilc *wilc, BUS_RELEASE_T release)
 	mutex_unlock(&wilc->hif_cs);
 }
 
-static void wilc_wlan_txq_remove(struct wilc *wilc, struct txq_entry_t *tqe)
+static void wilc_wlan_txq_remove(struct wilc *wilc, u8 q_num,
+				 struct txq_entry_t *tqe)
 {
-	if (tqe == wilc->txq_head) {
-		wilc->txq_head = tqe->next;
-		if (wilc->txq_head)
-			wilc->txq_head->prev = NULL;
-	} else if (tqe == wilc->txq_tail) {
-		wilc->txq_tail = (tqe->prev);
-		if (wilc->txq_tail)
-			wilc->txq_tail->next = NULL;
+	if (tqe == wilc->txq[q_num].txq_head) {
+		wilc->txq[q_num].txq_head = tqe->next;
+		if (wilc->txq[q_num].txq_head)
+			wilc->txq[q_num].txq_head->prev = NULL;
+	} else if (tqe == wilc->txq[q_num].txq_tail) {
+		wilc->txq[q_num].txq_tail = tqe->prev;
+		if (wilc->txq[q_num].txq_tail)
+			wilc->txq[q_num].txq_tail->next = NULL;
 	} else {
 		tqe->prev->next = tqe->next;
 		tqe->next->prev = tqe->prev;
 	}
 	wilc->txq_entries -= 1;
+	wilc->txq[q_num].count--;
 }
 
 static struct txq_entry_t *
@@ -265,7 +267,7 @@ static int wilc_wlan_txq_filter_dup_tcp_ack(struct net_device *dev)
 
 			tqe = pending_acks_info[i].txqe;
 			if (tqe) {
-				wilc_wlan_txq_remove(wilc, tqe);
+				wilc_wlan_txq_remove(wilc, tqe->q_num, tqe);
 				tqe->status = 1;
 				if (tqe->tx_complete_func)
 					tqe->tx_complete_func(tqe->priv,
