@@ -426,6 +426,23 @@ static inline u8 ac_classify(struct wilc *wilc, struct txq_entry_t *tqe)
 	return ac;
 }
 
+static inline int ac_balance(u8 *count, u8 *ratio)
+{
+	u8 i, max_count = 0;
+
+	if (!count || !ratio)
+		return -1;
+
+	for (i = 0; i < NQUEUES; i++)
+		if (count[i] > max_count)
+			max_count = count[i];
+
+	for (i = 0; i < NQUEUES; i++)
+		ratio[i] = max_count - count[i];
+
+	return 0;
+}
+
 int wilc_wlan_txq_add_net_pkt(struct net_device *dev, void *priv, u8 *buffer,
 			      u32 buffer_size, wilc_tx_complete_func_t func)
 {
