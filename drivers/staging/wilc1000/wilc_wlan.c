@@ -451,6 +451,16 @@ static inline void ac_pkt_count(u32 reg, u8 *pkt_count)
 	pkt_count[AC_VO_Q] = (reg & 0xfe000000) >> VO_AC_COUNT_POS;
 }
 
+static inline u8 ac_change(struct wilc *wilc, u8 *ac)
+{
+	do {
+		if (wilc->txq[*ac].acm == 0)
+			return 0;
+		(*ac)++;
+	} while (*ac < NQUEUES);
+	return 1;
+}
+
 int wilc_wlan_txq_add_net_pkt(struct net_device *dev, void *priv, u8 *buffer,
 			      u32 buffer_size, wilc_tx_complete_func_t func)
 {
