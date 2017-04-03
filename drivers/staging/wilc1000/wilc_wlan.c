@@ -333,6 +333,48 @@ static int wilc_wlan_txq_add_cfg_pkt(struct wilc_vif *vif, u8 *buffer,
 	return 1;
 }
 
+static inline void ac_q_limit(u8 ac, u16 *q_limit)
+{
+	static bool initialized;
+	static u8 buffer[AC_BUFFER_SIZE];
+	static u16 cnt[NQUEUES];
+	u8 factors[NQUEUES] = {1, 1, 1, 1};
+	static u16 sum;
+	u16 i;
+	static u16 end_index;
+
+	if (!initialized) {
+		for (i = 0; i < AC_BUFFER_SIZE; i++)
+			buffer[i] = i % NQUEUES;
+
+		for (i = 0; i < NQUEUES; i++) {
+			cnt[i] = AC_BUFFER_SIZE * factors[i] / NQUEUES;
+			sum += cnt[i];
+		}
+		end_index = AC_BUFFER_SIZE - 1;
+		initialized = 1;
+	}
+	if (end_index > AC_BUFFER_SIZE - 1)
+		end_index = AC_BUFFER_SIZE - 1;
+
+	cnt[buffer[end_index]] -= factors[buffer[end_index]];
+	cnt[ac] += factors[ac];
+	sum += (factors[ac] - factors[buffer[end_index]]);
+
+	buffer[end_index] = ac;
+	if (end_index > 0)
+		end_index--;
+	else
+		end_index = AC_BUFFER_SIZE - 1;
+
+	for (i = 0; i < NQUEUES; i++)
+		if (!sum)
+			q_limit[i] = 1;
+		else
+			q_limit[i] = (cnt[i] * FLOW_CONTROL_UPPER_THRESHOLD /
+				      sum) + 1;
+}
+
 int wilc_wlan_txq_add_net_pkt(struct net_device *dev, void *priv, u8 *buffer,
 			      u32 buffer_size, wilc_tx_complete_func_t func)
 {
