@@ -133,6 +133,17 @@
 
 #define MODALIAS		"WILC_SPI"
 #define GPIO_NUM		0x44
+
+#define NQUEUES			4
+#define VO_AC_COUNT_POS		25
+#define VO_AC_ACM_STAT_POS	24
+#define VI_AC_COUNT_POS		17
+#define VI_AC_ACM_STAT_POS	16
+#define BE_AC_COUNT_POS		9
+#define BE_AC_ACM_STAT_POS	8
+#define BK_AC_COUNT_POS		2
+#define BK_AC_ACM_STAT_POS	1
+#define AC_BUFFER_SIZE		1000
 /*******************************************/
 /*        E0 and later Interrupt flags.    */
 /*******************************************/
@@ -206,11 +217,25 @@ typedef void (*wilc_debug_func)(u32, char *, ...);
  *      Tx/Rx Queue Structure
  *
  ********************************************/
+struct txq_handle {
+	struct txq_entry_t *txq_head;
+	struct txq_entry_t *txq_tail;
+	u16 count;
+	u8 acm;
+};
+
+enum ip_pkt_priority {
+	AC_VO_Q = 0,
+	AC_VI_Q = 1,
+	AC_BE_Q = 2,
+	AC_BK_Q = 3
+};
 
 struct txq_entry_t {
 	struct txq_entry_t *next;
 	struct txq_entry_t *prev;
 	int type;
+	u8 q_num;
 	int tcp_pending_ack_idx;
 	u8 *buffer;
 	int buffer_size;
