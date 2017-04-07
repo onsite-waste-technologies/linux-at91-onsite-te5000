@@ -1105,7 +1105,7 @@ static int mac_ioctl(struct net_device *ndev, struct ifreq *req, int cmd)
 {
 	u8 *buff = NULL;
 	s8 rssi;
-	u32 size = 0, length = 0;
+	u32 size = 0;
 	struct wilc_vif *vif;
 	s32 ret = 0;
 	struct wilc *wilc;
@@ -1129,7 +1129,7 @@ static int mac_ioctl(struct net_device *ndev, struct ifreq *req, int cmd)
 			if (IS_ERR(buff))
 				return PTR_ERR(buff);
 
-			if (strncasecmp(buff, "RSSI", length) == 0) {
+			if (strncasecmp(buff, "RSSI", size) == 0) {
 				ret = wilc_get_rssi(vif, &rssi);
 				netdev_info(ndev, "RSSI :%d\n", rssi);
 
