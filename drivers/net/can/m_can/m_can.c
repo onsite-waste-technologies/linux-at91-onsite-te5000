@@ -1160,6 +1160,20 @@ static int register_m_can_dev(struct net_device *dev)
 	return register_candev(dev);
 }
 
+static void m_can_init_ram(struct m_can_priv *priv)
+{
+	int end, i, start;
+
+	/* initialize the entire Message RAM in use to avoid possible
+	 * ECC/parity checksum errors when reading an uninitialized buffer
+	 */
+	start = priv->mcfg[MRAM_SIDF].off;
+	end = priv->mcfg[MRAM_TXB].off +
+		priv->mcfg[MRAM_TXB].num * TXB_ELEMENT_SIZE;
+	for (i = start; i < end; i += 4)
+		writel(0x0, priv->mram_base + i);
+}
+
 static int m_can_of_parse_mram(struct platform_device *pdev,
 			       struct m_can_priv *priv)
 {
@@ -1167,7 +1181,7 @@ static int m_can_of_parse_mram(struct platform_device *pdev,
 	struct resource *res;
 	void __iomem *addr;
 	u32 out_val[MRAM_CFG_LEN];
-	int i, start, end, ret;
+	int ret;
 
 	/* message ram could be shared */
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "message_ram");
@@ -1218,14 +1232,7 @@ static int m_can_of_parse_mram(struct platform_device *pdev,
 		priv->mcfg[MRAM_TXE].off, priv->mcfg[MRAM_TXE].num,
 		priv->mcfg[MRAM_TXB].off, priv->mcfg[MRAM_TXB].num);
 
-	/* initialize the entire Message RAM in use to avoid possible
-	 * ECC/parity checksum errors when reading an uninitialized buffer
-	 */
-	start = priv->mcfg[MRAM_SIDF].off;
-	end = priv->mcfg[MRAM_TXB].off +
-		priv->mcfg[MRAM_TXB].num * TXB_ELEMENT_SIZE;
-	for (i = start; i < end; i += 4)
-		writel(0x0, priv->mram_base + i);
+	m_can_init_ram(priv);
 
 	return 0;
 }
@@ -1297,11 +1304,9 @@ static __maybe_unused int m_can_suspend(struct device *dev)
 	struct m_can_priv *priv = netdev_priv(ndev);
 
 	if (netif_running(ndev)) {
-		netif_stop_queue(ndev);
 		netif_device_detach(ndev);
+		m_can_close(ndev);
 	}
-
-	/* TODO: enter low power */
 
 	priv->can.state = CAN_STATE_SLEEPING;
 
@@ -1313,13 +1318,13 @@ static __maybe_unused int m_can_resume(struct device *dev)
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct m_can_priv *priv = netdev_priv(ndev);
 
-	/* TODO: exit low power */
+	m_can_init_ram(priv);
 
 	priv->can.state = CAN_STATE_ERROR_ACTIVE;
 
 	if (netif_running(ndev)) {
+		m_can_open(ndev);
 		netif_device_attach(ndev);
-		netif_start_queue(ndev);
 	}
 
 	return 0;
