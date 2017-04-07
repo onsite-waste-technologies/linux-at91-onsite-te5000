@@ -283,8 +283,12 @@ enum m_can_mram_cfg {
 
 /* Tx Buffer Element */
 /* R0 */
+#define TX_BUF_ESI		BIT(31)
 #define TX_BUF_XTD		BIT(30)
 #define TX_BUF_RTR		BIT(29)
+#define TX_BUF_EFC		BIT(23)
+#define TX_BUF_FDF		BIT(21)
+#define TX_BUF_BRS		BIT(20)
 
 /* address offset and element number for each FIFO/Buffer in the Message RAM */
 struct mram_cfg {
@@ -916,7 +920,7 @@ static void m_can_chip_config(struct net_device *dev)
 	}
 
 	if (priv->can.ctrlmode & CAN_CTRLMODE_FD)
-		cccr |= CCCR_CME_CANFD_BRS << CCCR_CME_SHIFT;
+		cccr |= (CCCR_CME_CANFD_BRS | CCCR_CME_CANFD) << CCCR_CME_SHIFT;
 
 	m_can_write(priv, M_CAN_CCCR, cccr);
 	m_can_write(priv, M_CAN_TEST, test);
@@ -1079,6 +1083,7 @@ static netdev_tx_t m_can_start_xmit(struct sk_buff *skb,
 	struct canfd_frame *cf = (struct canfd_frame *)skb->data;
 	u32 id, cccr;
 	int i;
+	u32 dlc;
 
 	if (can_dropped_invalid_skb(dev, skb))
 		return NETDEV_TX_OK;
@@ -1097,7 +1102,6 @@ static netdev_tx_t m_can_start_xmit(struct sk_buff *skb,
 
 	/* message ram configuration */
 	m_can_fifo_write(priv, 0, M_CAN_FIFO_ID, id);
-	m_can_fifo_write(priv, 0, M_CAN_FIFO_DLC, can_len2dlc(cf->len) << 16);
 
 	for (i = 0; i < cf->len; i += 4)
 		m_can_fifo_write(priv, 0, M_CAN_FIFO_DATA(i / 4),
@@ -1105,19 +1109,34 @@ static netdev_tx_t m_can_start_xmit(struct sk_buff *skb,
 
 	can_put_echo_skb(skb, dev, 0);
 
+	dlc = can_len2dlc(cf->len) << 16;
+
 	if (priv->can.ctrlmode & CAN_CTRLMODE_FD) {
-		cccr = m_can_read(priv, M_CAN_CCCR);
-		cccr &= ~(CCCR_CMR_MASK << CCCR_CMR_SHIFT);
-		if (can_is_canfd_skb(skb)) {
-			if (cf->flags & CANFD_BRS)
-				cccr |= CCCR_CMR_CANFD_BRS << CCCR_CMR_SHIFT;
-			else
-				cccr |= CCCR_CMR_CANFD << CCCR_CMR_SHIFT;
+		if (m_can_read_core_rev(priv) < M_CAN_COREREL_3_1_0) {
+			/* set CCCR according to frame content */
+			cccr = m_can_read(priv, M_CAN_CCCR);
+			cccr &= ~(CCCR_CMR_MASK << CCCR_CMR_SHIFT);
+			if (can_is_canfd_skb(skb)) {
+				if (cf->flags & CANFD_BRS)
+					cccr |= CCCR_CMR_CANFD_BRS << CCCR_CMR_SHIFT;
+				else
+					cccr |= CCCR_CMR_CANFD << CCCR_CMR_SHIFT;
+			} else {
+				cccr |= CCCR_CMR_CAN << CCCR_CMR_SHIFT;
+			}
+			m_can_write(priv, M_CAN_CCCR, cccr);
 		} else {
-			cccr |= CCCR_CMR_CAN << CCCR_CMR_SHIFT;
+			/* set tx buffer according to frame content */
+			if (can_is_canfd_skb(skb)) {
+				dlc |= TX_BUF_FDF;
+				if (cf->flags & CANFD_ESI)
+					dlc |= TX_BUF_ESI;
+				if (cf->flags & CANFD_BRS)
+					dlc |= TX_BUF_BRS;
+			}
 		}
-		m_can_write(priv, M_CAN_CCCR, cccr);
 	}
+	m_can_fifo_write(priv, 0, M_CAN_FIFO_DLC, dlc);
 
 	/* enable first TX buffer to start transfer  */
 	m_can_write(priv, M_CAN_TXBTIE, 0x1);
