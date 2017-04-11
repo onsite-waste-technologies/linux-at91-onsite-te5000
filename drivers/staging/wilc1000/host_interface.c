@@ -47,6 +47,7 @@
 #define HOST_IF_MSG_DEL_ALL_STA                 36
 #define HOST_IF_MSG_SET_TX_POWER		38
 #define HOST_IF_MSG_GET_TX_POWER		39
+#define HOST_IF_MSG_SET_ANTENNA_MODE		40
 #define HOST_IF_MSG_EXIT                        100
 
 #define HOST_IF_SCAN_TIMEOUT                    4000
@@ -191,6 +192,7 @@ union message_body {
 	char *data;
 	struct del_all_sta del_all_sta_info;
 	struct tx_power tx_power;
+	u8 antenna_mode;
 };
 
 struct host_if_msg {
@@ -2475,6 +2477,26 @@ static void handle_get_tx_pwr(struct wilc_vif *vif, u8 *tx_pwr)
 	complete(&hif_wait_response);
 }
 
+static int handle_set_antenna_mode(struct wilc_vif *vif, u8 mode)
+{
+	int ret = 0;
+	struct wid wid;
+
+	wid.id = (u16)WID_ANTENNA_SELECTION;
+	wid.type = WID_CHAR;
+	wid.val = &mode;
+	wid.size = sizeof(char);
+
+	netdev_dbg(vif->ndev, "set antenna %d\n", mode);
+
+	ret = wilc_send_config_pkt(vif, SET_CFG, &wid, 1,
+				   wilc_get_vif_idx(vif));
+	if(ret)
+		netdev_err(vif->ndev, "Failed to set antenna mode\n");
+
+	return ret;
+}
+
 static void host_if_work(struct work_struct *work)
 {
 	struct host_if_msg *msg;
@@ -2634,6 +2656,11 @@ static void host_if_work(struct work_struct *work)
 	case HOST_IF_MSG_GET_TX_POWER:
 		handle_get_tx_pwr(msg->vif, &msg->body.tx_power.tx_pwr);
 		break;
+
+	case HOST_IF_MSG_SET_ANTENNA_MODE:
+		handle_set_antenna_mode(msg->vif, &msg->body.antenna_mode);
+		break;
+
 	default:
 		netdev_err(msg->vif->ndev, "[Host Interface] undefined\n");
 		break;
@@ -4090,4 +4117,22 @@ int wilc_get_tx_power(struct wilc_vif *vif, u8 *tx_power)
 	*tx_power = msg.body.tx_power.tx_pwr;
 
 	return ret;
+}
+
+int wilc_set_antenna(struct wilc_vif *vif, u8 mode)
+{
+	int ret = 0;
+	struct host_if_msg msg;
+
+	memset(&msg, 0, sizeof(struct host_if_msg));
+
+	msg.id = HOST_IF_MSG_SET_ANTENNA_MODE;
+	msg.vif = vif;
+	msg.body.antenna_mode = mode;
+
+	ret = wilc_enqueue_cmd(&msg);
+	if(ret)
+		return -EINVAL;
+
+	return (ret);
 }

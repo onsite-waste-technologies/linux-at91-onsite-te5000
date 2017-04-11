@@ -2178,6 +2178,22 @@ static int get_tx_power(struct wiphy *wiphy, struct wireless_dev *wdev,
 	return ret;
 }
 
+static int set_antenna(struct wiphy *wiphy, u32 tx_ant, u32 rx_ant)
+{
+	int ret;
+	struct wilc_priv *priv = wiphy_priv(wiphy);
+	struct wilc_vif *vif = netdev_priv(priv->dev);
+
+	if (!tx_ant || !rx_ant)
+		return -EINVAL;
+
+	ret = wilc_set_antenna(vif, (u8)tx_ant);
+	if (ret)
+		netdev_err(vif->ndev, "Failed to set tx antenna\n");
+
+	return ret;
+}
+
 static const struct cfg80211_ops wilc_cfg80211_ops = {
 	.set_monitor_channel = set_channel,
 	.scan = scan,
@@ -2218,7 +2234,7 @@ static const struct cfg80211_ops wilc_cfg80211_ops = {
 	.set_wakeup = wilc_set_wakeup,
 	.set_tx_power = set_tx_power,
 	.get_tx_power = get_tx_power,
-
+	.set_antenna = set_antenna,
 };
 
 static struct wireless_dev *WILC_WFI_CfgAlloc(void)
@@ -2272,6 +2288,8 @@ struct wireless_dev *wilc_create_wiphy(struct net_device *net, struct device *de
 	wdev->wiphy->signal_type = CFG80211_SIGNAL_TYPE_MBM;
 	wdev->wiphy->cipher_suites = cipher_suites;
 	wdev->wiphy->n_cipher_suites = ARRAY_SIZE(cipher_suites);
+	wdev->wiphy->available_antennas_tx = 0x3;
+	wdev->wiphy->available_antennas_rx = 0x3;
 	wdev->wiphy->mgmt_stypes = wilc_wfi_cfg80211_mgmt_types;
 
 	wdev->wiphy->max_remain_on_channel_duration = 500;

@@ -360,6 +360,7 @@ void wilc_resolve_disconnect_aberration(struct wilc_vif *vif);
 int wilc_get_vif_idx(struct wilc_vif *vif);
 int wilc_set_tx_power(struct wilc_vif *vif, u8 tx_power);
 int wilc_get_tx_power(struct wilc_vif *vif, u8 *tx_power);
+int wilc_set_antenna(struct wilc_vif *vif, u8 mode);
 
 extern bool wilc_optaining_ip;
 extern u8 wilc_connected_ssid[6];

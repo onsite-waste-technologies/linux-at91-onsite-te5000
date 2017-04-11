@@ -846,7 +846,7 @@ int wilc_wlan_handle_txq(struct net_device *dev, u32 *txq_count)
 					entries = ((reg >> 3) & 0x3f);
 					break;
 				}
-				release_bus(wilc, RELEASE_ALLOW_SLEEP);
+			//	release_bus(wilc, RELEASE_ALLOW_SLEEP);
 			} while (--timeout);
 			if (timeout <= 0) {
 				ret = wilc->hif_func->hif_write_reg(wilc, WILC_HOST_VMM_CTL, 0x0);
@@ -878,7 +878,7 @@ int wilc_wlan_handle_txq(struct net_device *dev, u32 *txq_count)
 		}
 
 		release_bus(wilc, RELEASE_ALLOW_SLEEP);
-
+		schedule();
 		offset = 0;
 		i = 0;
 		do {
