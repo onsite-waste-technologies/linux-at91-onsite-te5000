@@ -1256,7 +1256,7 @@
 				assigned-clocks = <&can0_gclk>;
 				assigned-clock-parents = <&utmi>;
 				assigned-clock-rates = <40000000>;
-				bosch,mram-cfg = <0x0 0 0 32 0 0 0 1>;
+				bosch,mram-cfg = <0x0 0 0 64 0 0 32 32>;
 				status = "disabled";
 			};
 
@@ -1457,7 +1457,7 @@
 				assigned-clocks = <&can1_gclk>;
 				assigned-clock-parents = <&utmi>;
 				assigned-clock-rates = <40000000>;
-				bosch,mram-cfg = <0x0 0 0 32 0 0 0 1>;
+				bosch,mram-cfg = <0x1100 0 0 64 0 0 32 32>;
 				status = "disabled";
 			};
 
