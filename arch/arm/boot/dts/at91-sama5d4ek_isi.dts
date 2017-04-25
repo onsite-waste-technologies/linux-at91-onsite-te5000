@@ -112,4 +112,24 @@
 			};
 		};
 	};
+
+	ov7740: camera@21 {
+		compatible = "ovti,ov7740";
+		reg = <0x21>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_pck1_as_isi_mck &pinctrl_sensor_power &pinctrl_sensor_reset>;
+		resetb-gpios = <&pioB 11 GPIO_ACTIVE_LOW>;
+		pwdn-gpios = <&pioB 5 GPIO_ACTIVE_HIGH>;
+		/* use pck1 for the master clock of ov2640 */
+		clocks = <&pck1>;
+		clock-names = "xvclk";
+		assigned-clocks = <&pck1>;
+		assigned-clock-rates = <24000000>;
+
+		port {
+			ov7740_0: endpoint {
+				remote-endpoint = <&isi_0>;
+			};
+		};
+	};
 };
