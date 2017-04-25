@@ -28,6 +28,7 @@
 
 struct ov7740_priv{
         struct v4l2_subdev       subdev;
+	struct media_pad	 pad;
 	struct v4l2_ctrl_handler hdl;
         struct regmap           *regmap;
         struct clk              *xvclk;
@@ -535,6 +536,16 @@ static int ov7740_probe(struct i2c_client *client,
         sd = &priv->subdev;
         client->flags |= I2C_CLIENT_SCCB;
 	v4l2_i2c_subdev_init(sd, client, &ov7740_subdev_ops);
+
+	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
+
+#if defined(CONFIG_MEDIA_CONTROLLER)
+	priv->pad.flags = MEDIA_PAD_FL_SOURCE;
+	sd->entity.function = MEDIA_ENT_F_CAM_SENSOR;
+	ret = media_entity_pads_init(&sd->entity, 1, &priv->pad);
+	if (ret)
+		return ret;
+#endif
 
         ret = ov7740_detect(priv);
         if (ret)
