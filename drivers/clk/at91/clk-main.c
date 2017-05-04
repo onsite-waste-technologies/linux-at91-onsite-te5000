@@ -625,17 +625,33 @@ static int pmc_suspend(void)
 	return 0;
 }
 
+static bool pmc_ready(unsigned int mask)
+{
+	unsigned int status;
+
+	regmap_read(pmcreg, AT91_PMC_SR, &status);
+
+	return ((status & mask) == mask) ? 1 : 0;
+}
+
 static void pmc_resume(void)
 {
 	int i;
+	unsigned int mask = 0;
+	u32 tmp;
+
+	regmap_read(pmcreg, AT91_PMC_MCKR, &tmp);
+	if (pmc_cache.mckr != tmp)
+		pr_warn("MCKR was not configured properly by the firmware\n");
+	regmap_read(pmcreg, AT91_CKGR_PLLAR, &tmp);
+	if (pmc_cache.pllar != tmp)
+		pr_warn("PLLAR was not configured properly by the firmware\n");
 
 	regmap_write(pmcreg, AT91_PMC_IMR, pmc_cache.scsr);
 	regmap_write(pmcreg, AT91_PMC_PCER, pmc_cache.pcsr0);
 	regmap_write(pmcreg, AT91_CKGR_UCKR, pmc_cache.uckr);
 	regmap_write(pmcreg, AT91_CKGR_MOR, pmc_cache.mor);
 	regmap_write(pmcreg, AT91_CKGR_MCFR, pmc_cache.mcfr);
-	regmap_write(pmcreg, AT91_CKGR_PLLAR, pmc_cache.pllar);
-	regmap_write(pmcreg, AT91_PMC_MCKR, pmc_cache.mckr);
 	regmap_write(pmcreg, AT91_PMC_USB, pmc_cache.usb);
 	regmap_write(pmcreg, AT91_PMC_IMR, pmc_cache.imr);
 	regmap_write(pmcreg, AT91_PMC_PCER1, pmc_cache.pcsr1);
@@ -644,6 +660,12 @@ static void pmc_resume(void)
 		regmap_write(pmcreg, AT91_PMC_PCR, (i & AT91_PMC_PCR_PID_MASK));
 		regmap_write(pmcreg, AT91_PMC_PCR, pmc_cache.pcr[i]);
 	}
+
+	if (pmc_cache.uckr & AT91_PMC_UPLLEN)
+		mask |= AT91_PMC_LOCKU;
+
+	while (!pmc_ready(mask))
+		cpu_relax();
 }
 
 static struct syscore_ops pmc_syscore_ops = {
