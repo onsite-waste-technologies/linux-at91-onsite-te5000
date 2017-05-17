@@ -183,7 +183,7 @@ struct isc_device {
 #define RAW_FMT_IND_START    0
 #define RAW_FMT_IND_END      11
 #define ISC_FMT_IND_START    12
-#define ISC_FMT_IND_END      14
+#define ISC_FMT_IND_END      15
 
 static struct isc_format isc_formats[] = {
 	{ V4L2_PIX_FMT_SBGGR8, MEDIA_BUS_FMT_SBGGR8_1X8, 8,
@@ -237,6 +237,10 @@ static struct isc_format isc_formats[] = {
 	  ISC_DCFG_IMODE_PACKED16, ISC_DCTRL_DVIEW_PACKED, 0x0,
 	  false, false },
 
+	{ V4L2_PIX_FMT_GREY, MEDIA_BUS_FMT_Y8_1X8, 8,
+	  ISC_PFE_CFG0_BPS_EIGHT, ISC_BAY_CFG_BGBG, ISC_RLP_CFG_MODE_DATY8,
+	  ISC_DCFG_IMODE_PACKED8, ISC_DCTRL_DVIEW_PACKED, 0x1fb,
+	  false, false },
 	{ V4L2_PIX_FMT_YUV420, 0x0, 12,
 	  ISC_PFE_CFG0_BPS_EIGHT, ISC_BAY_CFG_BGBG, ISC_RLP_CFG_MODE_YYCC,
 	  ISC_DCFG_IMODE_YC420P, ISC_DCTRL_DVIEW_PLANAR, 0x7fb,
