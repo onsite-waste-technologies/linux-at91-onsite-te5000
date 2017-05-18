@@ -188,6 +188,10 @@
 			status = "okay";
 		};
 
+		vdec0: vdec@00300000 {
+			status = "okay";
+		};
+
 		nand0: nand@80000000 {
 			nand-bus-width = <8>;
 			nand-ecc-mode = "hw";
