@@ -44,6 +44,32 @@ struct sdhci_at91_priv {
 	struct clk *mainck;
 };
 
+static void sdhci_at91_disable_clocks(struct sdhci_at91_priv *priv)
+{
+	clk_disable_unprepare(priv->hclock);
+	clk_disable_unprepare(priv->gck);
+	clk_disable_unprepare(priv->mainck);
+}
+
+static int __maybe_unused sdhci_at91_enable_clocks(struct sdhci_at91_priv *priv)
+{
+	int ret;
+
+	ret = clk_prepare_enable(priv->mainck);
+	if (ret)
+		return ret;
+
+	ret = clk_prepare_enable(priv->gck);
+	if (ret)
+		return ret;
+
+	ret = clk_prepare_enable(priv->hclock);
+	if (ret)
+		return ret;
+
+	return ret;
+}
+
 static void sdhci_at91_set_clock(struct sdhci_host *host, unsigned int clock)
 {
 	u16 clk;
@@ -152,9 +178,7 @@ static int sdhci_at91_runtime_suspend(struct device *dev)
 
 	ret = sdhci_runtime_suspend_host(host);
 
-	clk_disable_unprepare(priv->gck);
-	clk_disable_unprepare(priv->hclock);
-	clk_disable_unprepare(priv->mainck);
+	sdhci_at91_disable_clocks(priv);
 
 	return ret;
 }
@@ -166,21 +190,9 @@ static int sdhci_at91_runtime_resume(struct device *dev)
 	struct sdhci_at91_priv *priv = sdhci_pltfm_priv(pltfm_host);
 	int ret;
 
-	ret = clk_prepare_enable(priv->mainck);
+	ret = sdhci_at91_enable_clocks(priv);
 	if (ret) {
-		dev_err(dev, "can't enable mainck\n");
-		return ret;
-	}
-
-	ret = clk_prepare_enable(priv->hclock);
-	if (ret) {
-		dev_err(dev, "can't enable hclock\n");
-		return ret;
-	}
-
-	ret = clk_prepare_enable(priv->gck);
-	if (ret) {
-		dev_err(dev, "can't enable gck\n");
+		dev_err(dev, "can't enable clocks\n");
 		return ret;
 	}
 
@@ -377,9 +389,6 @@ static int sdhci_at91_remove(struct platform_device *pdev)
 	struct sdhci_host	*host = platform_get_drvdata(pdev);
 	struct sdhci_pltfm_host	*pltfm_host = sdhci_priv(host);
 	struct sdhci_at91_priv	*priv = sdhci_pltfm_priv(pltfm_host);
-	struct clk *gck = priv->gck;
-	struct clk *hclock = priv->hclock;
-	struct clk *mainck = priv->mainck;
 
 	pm_runtime_get_sync(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
@@ -387,9 +396,7 @@ static int sdhci_at91_remove(struct platform_device *pdev)
 
 	sdhci_pltfm_unregister(pdev);
 
-	clk_disable_unprepare(gck);
-	clk_disable_unprepare(hclock);
-	clk_disable_unprepare(mainck);
+	sdhci_at91_disable_clocks(priv);
 
 	return 0;
 }
