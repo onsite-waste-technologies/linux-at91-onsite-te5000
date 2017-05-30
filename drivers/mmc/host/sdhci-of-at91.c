@@ -169,6 +169,36 @@ static const struct of_device_id sdhci_at91_dt_match[] = {
 };
 
 #ifdef CONFIG_PM
+static int sdhci_at91_suspend(struct device *dev) {
+	struct sdhci_host *host = dev_get_drvdata(dev);
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
+	struct sdhci_at91_priv *priv = sdhci_pltfm_priv(pltfm_host);
+	int ret;
+
+	ret = sdhci_suspend_host(host);
+
+	if (!host->runtime_suspended)
+		sdhci_at91_disable_clocks(priv);
+
+	return ret;
+}
+
+static int sdhci_at91_resume(struct device *dev)
+{
+	struct sdhci_host *host = dev_get_drvdata(dev);
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
+	struct sdhci_at91_priv *priv = sdhci_pltfm_priv(pltfm_host);
+	int ret;
+
+	ret = sdhci_at91_enable_clocks(priv);
+	if (ret) {
+		dev_err(dev, "can't enable clocks\n");
+		return ret;
+	}
+
+	return sdhci_resume_host(host);
+}
+
 static int sdhci_at91_runtime_suspend(struct device *dev)
 {
 	struct sdhci_host *host = dev_get_drvdata(dev);
@@ -201,8 +231,8 @@ static int sdhci_at91_runtime_resume(struct device *dev)
 #endif /* CONFIG_PM */
 
 static const struct dev_pm_ops sdhci_at91_dev_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
-				pm_runtime_force_resume)
+	SET_SYSTEM_SLEEP_PM_OPS(sdhci_at91_suspend,
+				sdhci_at91_resume)
 	SET_RUNTIME_PM_OPS(sdhci_at91_runtime_suspend,
 			   sdhci_at91_runtime_resume,
 			   NULL)
@@ -366,6 +396,8 @@ static int sdhci_at91_probe(struct platform_device *pdev)
 		mc1r |= SDMMC_MC1R_FCD;
 		writeb(mc1r, host->ioaddr + SDMMC_MC1R);
 	}
+
+	device_init_wakeup(&pdev->dev, true);
 
 	pm_runtime_put_autosuspend(&pdev->dev);
 
