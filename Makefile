@@ -1,7 +1,7 @@
 VERSION = 4
 PATCHLEVEL = 9
 SUBLEVEL = 30
-EXTRAVERSION = -linux4sam_5.6-rc2
+EXTRAVERSION = -linux4sam_5.6-rc4
 NAME = Roaring Lionus
 
 # *DOCUMENTATION*
