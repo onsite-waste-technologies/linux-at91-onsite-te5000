@@ -6,7 +6,8 @@ obj-y		:= soc.o
 # CPU-specific support
 obj-$(CONFIG_SOC_AT91RM9200)	+= at91rm9200.o
 obj-$(CONFIG_SOC_AT91SAM9)	+= at91sam9.o
-obj-$(CONFIG_SOC_SAMA5)		+= sama5.o memalloc.o vdec_g1.o
+obj-$(CONFIG_SOC_SAMA5)		+= sama5.o
+obj-$(CONFIG_AT91_VDEC_G1)	+= memalloc.o vdec_g1.o
 
 # Power Management
 obj-$(CONFIG_PM)		+= pm.o
