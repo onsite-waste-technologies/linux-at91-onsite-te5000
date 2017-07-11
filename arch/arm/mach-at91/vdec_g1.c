@@ -437,7 +437,7 @@ static int __exit vdec_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id vdec_of_match[] = {
-	{ .compatible = "on2,g1", .data = NULL },
+	{ .compatible = "on2,sama5d4-g1", .data = NULL },
 	{},
 };
 MODULE_DEVICE_TABLE(of, vdec_of_match);
