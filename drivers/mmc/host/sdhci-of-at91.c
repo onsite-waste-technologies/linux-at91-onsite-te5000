@@ -42,6 +42,7 @@ struct sdhci_at91_priv {
 	struct clk *hclock;
 	struct clk *gck;
 	struct clk *mainck;
+	bool restore_needed;
 };
 
 static void sdhci_at91_disable_clocks(struct sdhci_at91_priv *priv)
@@ -246,37 +247,23 @@ static int sdhci_at91_set_clks_presets(struct device *dev)
 	return 0;
 }
 
-#ifdef CONFIG_PM
-static int sdhci_at91_suspend(struct device *dev) {
-	struct sdhci_host *host = dev_get_drvdata(dev);
-	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
-	struct sdhci_at91_priv *priv = sdhci_pltfm_priv(pltfm_host);
-	int ret;
-
-	ret = sdhci_suspend_host(host);
-
-	if (!host->runtime_suspended)
-		sdhci_at91_disable_clocks(priv);
-
-	return ret;
-}
-
-static int sdhci_at91_resume(struct device *dev)
+#ifdef CONFIG_PM_SLEEP
+static int sdhci_at91_suspend(struct device *dev)
 {
 	struct sdhci_host *host = dev_get_drvdata(dev);
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_at91_priv *priv = sdhci_pltfm_priv(pltfm_host);
 	int ret;
 
-	ret = sdhci_at91_enable_clocks(priv);
-	if (ret) {
-		dev_err(dev, "can't enable clocks\n");
-		return ret;
-	}
+	ret = pm_runtime_force_suspend(dev);
 
-	return sdhci_resume_host(host);
+	priv->restore_needed = true;
+
+	return ret;
 }
+#endif /* CONFIG_PM_SLEEP */
 
+#ifdef CONFIG_PM
 static int sdhci_at91_runtime_suspend(struct device *dev)
 {
 	struct sdhci_host *host = dev_get_drvdata(dev);
@@ -298,19 +285,28 @@ static int sdhci_at91_runtime_resume(struct device *dev)
 	struct sdhci_at91_priv *priv = sdhci_pltfm_priv(pltfm_host);
 	int ret;
 
+	if (priv->restore_needed) {
+		ret = sdhci_at91_set_clks_presets(dev);
+		if (ret)
+			return ret;
+
+		priv->restore_needed = false;
+		goto out;
+	}
+
 	ret = sdhci_at91_enable_clocks(priv);
 	if (ret) {
 		dev_err(dev, "can't enable clocks\n");
 		return ret;
 	}
 
+out:
 	return sdhci_runtime_resume_host(host);
 }
 #endif /* CONFIG_PM */
 
 static const struct dev_pm_ops sdhci_at91_dev_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(sdhci_at91_suspend,
-				sdhci_at91_resume)
+	SET_SYSTEM_SLEEP_PM_OPS(sdhci_at91_suspend, pm_runtime_force_resume)
 	SET_RUNTIME_PM_OPS(sdhci_at91_runtime_suspend,
 			   sdhci_at91_runtime_resume,
 			   NULL)
@@ -358,6 +354,8 @@ static int sdhci_at91_probe(struct platform_device *pdev)
 	ret = sdhci_at91_set_clks_presets(&pdev->dev);
 	if (ret)
 		goto sdhci_pltfm_free;
+
+	priv->restore_needed = false;
 
 	ret = mmc_of_parse(host->mmc);
 	if (ret)
