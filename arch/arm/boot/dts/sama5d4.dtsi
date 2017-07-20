@@ -1118,6 +1118,8 @@
 				compatible = "atmel,at91sam9260-usart";
 				reg = <0xfc010000 0x100>;
 				interrupts = <31 IRQ_TYPE_LEVEL_HIGH 5>;
+				atmel,use-dma-rx;
+				atmel,use-dma-tx;
 				dmas = <&dma1
 					(AT91_XDMAC_DT_MEM_IF(0) | AT91_XDMAC_DT_PER_IF(1)
 					| AT91_XDMAC_DT_PERID(20))>,
@@ -1126,7 +1128,7 @@
 					| AT91_XDMAC_DT_PERID(21))>;
 				dma-names = "tx", "rx";
 				pinctrl-names = "default";
-				pinctrl-0 = <&pinctrl_usart4>;
+				pinctrl-0 = <&pinctrl_usart4 &pinctrl_usart4_rts &pinctrl_usart4_cts>;
 				clocks = <&usart4_clk>;
 				clock-names = "usart";
 				status = "disabled";
