@@ -91,6 +91,20 @@
 		};
 
 		apb {
+			hlcdc: hlcdc@f0000000 {
+				status = "disabled";
+
+				hlcdc-display-controller {
+					pinctrl-names = "default";
+					pinctrl-0 = <&pinctrl_lcd_base &pinctrl_lcd_rgb>;
+				};
+
+				hlcdc_pwm: hlcdc-pwm {
+					pinctrl-names = "default";
+					pinctrl-0 = <&pinctrl_lcd_pwm>;
+				};
+			};
+
 			isc: isc@f0008000 {
 				pinctrl-names = "default";
 				pinctrl-0 = <&pinctrl_isc_base &pinctrl_isc_data_8bit &pinctrl_isc_data_9_10 &pinctrl_isc_data_11_12>;
@@ -268,6 +282,47 @@
 			};
 
 			pinctrl@fc038000 {
+
+				pinctrl_lcd_base: pinctrl_lcd_base {
+					pinmux = <PIN_PC5__LCDVSYNC>,
+						 <PIN_PC6__LCDHSYNC>,
+						 <PIN_PC8__LCDDEN>,
+						 <PIN_PC7__LCDPCK>;
+					bias-disable;
+				};
+
+				pinctrl_lcd_rgb: pinctrl_lcd_rgb {
+					pinmux = <PIN_PB11__LCDDAT0>,
+						 <PIN_PB12__LCDDAT1>,
+						 <PIN_PB13__LCDDAT2>,
+						 <PIN_PB14__LCDDAT3>,
+						 <PIN_PB15__LCDDAT4>,
+						 <PIN_PB16__LCDDAT5>,
+						 <PIN_PB17__LCDDAT6>,
+						 <PIN_PB18__LCDDAT7>,
+						 <PIN_PB19__LCDDAT8>,
+						 <PIN_PB20__LCDDAT9>,
+						 <PIN_PB21__LCDDAT10>,
+						 <PIN_PB22__LCDDAT11>,
+						 <PIN_PB23__LCDDAT12>,
+						 <PIN_PB24__LCDDAT13>,
+						 <PIN_PB25__LCDDAT14>,
+						 <PIN_PB26__LCDDAT15>,
+						 <PIN_PB27__LCDDAT16>,
+						 <PIN_PB28__LCDDAT17>,
+						 <PIN_PB29__LCDDAT18>,
+						 <PIN_PB30__LCDDAT19>,
+						 <PIN_PB31__LCDDAT20>,
+						 <PIN_PC0__LCDDAT21>,
+						 <PIN_PC1__LCDDAT22>,
+						 <PIN_PC2__LCDDAT23>;
+					bias-disable;
+				};
+
+				pinctrl_lcd_pwm: pinctrl_lcd_pwm {
+					pinmux = <PIN_PC3__LCDPWM>;
+					bias-disable;
+				};
 
 				pinctrl_can0_default: can0_default {
 					pinmux = <PIN_PC10__CANTX0>,
