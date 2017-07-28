@@ -48,6 +48,9 @@ dtb-$(CONFIG_SOC_SAM_V7) += \
 	at91-kizbox2.dtb \
 	at91-sama5d2_ptc.dtb \
 	at91-sama5d27_som1_ek.dtb \
+	at91-sama5d27_som1_ek_pda4.dtb \
+	at91-sama5d27_som1_ek_pda7.dtb \
+	at91-sama5d27_som1_ek_pda7b.dtb \
 	at91-sama5d2_xplained.dtb \
 	at91-sama5d2_xplained_pda4.dtb \
 	at91-sama5d2_xplained_pda7.dtb \
