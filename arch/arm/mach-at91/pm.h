@@ -21,10 +21,10 @@
 extern void __iomem *at91_ramc_base[];
 
 #define at91_ramc_read(id, field) \
-	__raw_readl(at91_ramc_base[id] + field)
+	__raw_readl(pm_args.ramc[id] + field)
 
 #define at91_ramc_write(id, field, value) \
-	__raw_writel(value, at91_ramc_base[id] + field)
+	__raw_writel(value, pm_args.ramc[id] + field)
 #endif
 
 #define AT91_MEMCTRL_MC		0
