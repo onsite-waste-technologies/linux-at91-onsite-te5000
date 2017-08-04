@@ -22,7 +22,6 @@
 #include <linux/of_platform.h>
 #include <linux/of_address.h>
 #include <linux/platform_device.h>
-#include <linux/platform_data/atmel.h>
 #include <linux/io.h>
 #include <linux/clk/at91_pmc.h>
 #include <linux/mfd/syscon.h>
@@ -35,6 +34,7 @@
 #include <asm/fncpy.h>
 #include <asm/cacheflush.h>
 #include <asm/system_misc.h>
+#include <asm/suspend.h>
 
 #include "generic.h"
 #include "pm.h"
@@ -57,6 +57,7 @@ static struct {
 	unsigned long uhp_udp_mask;
 	int memctrl;
 	u32 ulp_mode;
+	int deepest_state;
 } at91_pm_data;
 
 static struct at91_pm_args {
@@ -82,6 +83,15 @@ static int at91_pm_valid_state(suspend_state_t state)
 	}
 }
 
+
+static int canary = 0xA5A5A5A5;
+
+static struct at91_pm_bu {
+	int suspended;
+	phys_addr_t canary;
+	phys_addr_t resume;
+	phys_addr_t canary2;
+} *pm_bu;
 
 static suspend_state_t target_state;
 
@@ -148,6 +158,16 @@ static void (*at91_suspend_sram_fn)(struct at91_pm_args*);
 extern void at91_pm_suspend_in_sram(struct at91_pm_args*);
 extern u32 at91_pm_suspend_in_sram_sz;
 
+static int at91_suspend_finish(unsigned long val)
+{
+	flush_cache_all();
+	outer_disable();
+
+	at91_suspend_sram_fn(&pm_args);
+
+	return 0;
+}
+
 static void at91_pm_suspend(suspend_state_t state)
 {
 	pm_args.memctrl = at91_pm_data.memctrl;
@@ -158,10 +178,7 @@ static void at91_pm_suspend(suspend_state_t state)
 			pm_args.ulp_mode = AT91_PM_ULP1_MODE;
 	}
 
-	flush_cache_all();
-	outer_disable();
-
-	at91_suspend_sram_fn(&pm_args);
+	at91_suspend_finish(0);
 
 	outer_resume();
 }
@@ -384,6 +401,25 @@ static __init void at91_dt_ramc(void)
 	at91_pm_set_standby(standby);
 }
 
+static __init void at91_dt_shdwc(void)
+{
+	struct device_node *np;
+
+	np = of_find_compatible_node(NULL, NULL, "atmel,sama5d2-shdwc");
+	if (!np)
+		return;
+
+	pm_args.shdwc = of_iomap(np, 0);
+	of_node_put(np);
+
+	np = of_find_compatible_node(NULL, NULL, "atmel,sama5d2-sfrbu");
+	if (!np)
+		return;
+	
+	pm_args.sfrbu = of_iomap(np, 0);
+	of_node_put(np);
+}
+
 static void at91rm9200_idle(void)
 {
 	/*
@@ -443,6 +479,45 @@ static void __init at91_pm_sram_init(void)
 	/* Copy the pm suspend handler to SRAM */
 	at91_suspend_sram_fn = fncpy(at91_suspend_sram_fn,
 			&at91_pm_suspend_in_sram, at91_pm_suspend_in_sram_sz);
+}
+
+static void __init at91_pm_bu_sram_init(void)
+{
+	struct gen_pool *sram_pool;
+	struct device_node *node;
+	struct platform_device *pdev = NULL;
+
+	pm_bu = NULL;
+
+	for_each_compatible_node(node, NULL, "atmel,sama5d2-securam") {
+		pdev = of_find_device_by_node(node);
+		if (pdev) {
+			of_node_put(node);
+			break;
+		}
+	}
+
+	if (!pdev) {
+		pr_warn("%s: failed to find securam device!\n", __func__);
+		return;
+	}
+
+	sram_pool = gen_pool_get(&pdev->dev, NULL);
+	if (!sram_pool) {
+		pr_warn("%s: securam pool unavailable!\n", __func__);
+		return;
+	}
+
+	pm_bu = (void *)gen_pool_alloc(sram_pool, sizeof(struct at91_pm_bu));
+	if (!pm_bu) {
+		pr_warn("%s: unable to alloc securam!\n", __func__);
+		return;
+	}
+
+	pm_bu->suspended = 0;
+	pm_bu->canary = virt_to_phys(&canary);
+	pm_bu->resume = virt_to_phys(cpu_resume);
+	pm_bu->canary2 = virt_to_phys(&canary);
 }
 
 static const struct of_device_id atmel_pmc_ids[] __initconst = {
@@ -592,6 +667,10 @@ void __init sama5_pm_init(void)
 
 void __init sama5d2_pm_init(void)
 {
+	at91_dt_shdwc();
+	at91_pm_bu_sram_init();
+	at91_pm_data.deepest_state = AT91_PM_BACKUP;
+
 	sama5_pm_init();
 
 	at91_pm_data.ulp_mode = ULP1_MODE;

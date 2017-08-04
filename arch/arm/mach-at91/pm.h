@@ -38,6 +38,7 @@ extern void __iomem *at91_ramc_base[];
 #define	AT91_PM_MODE(x)		(((x) & AT91_PM_MODE_MASK) << AT91_PM_MODE_OFFSET)
 
 #define	AT91_PM_SLOW_CLOCK	0x01
+#define AT91_PM_BACKUP		0x02
 
 #define AT91_PM_ULP_OFFSET	5
 #define AT91_PM_ULP_MASK	0x03
