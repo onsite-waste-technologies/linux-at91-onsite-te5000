@@ -22,6 +22,7 @@
 #include <linux/of_platform.h>
 #include <linux/of_address.h>
 #include <linux/platform_device.h>
+#include <linux/regulator/machine.h>
 #include <linux/io.h>
 #include <linux/clk/at91_pmc.h>
 #include <linux/mfd/syscon.h>
@@ -83,14 +84,13 @@ static int at91_pm_valid_state(suspend_state_t state)
 	}
 }
 
-
 static int canary = 0xA5A5A5A5;
 
 static struct at91_pm_bu {
 	int suspended;
+	phys_addr_t reserved;
 	phys_addr_t canary;
 	phys_addr_t resume;
-	phys_addr_t canary2;
 } *pm_bu;
 
 static suspend_state_t target_state;
@@ -101,7 +101,7 @@ static suspend_state_t target_state;
 static int at91_pm_begin(suspend_state_t state)
 {
 	target_state = state;
-	return 0;
+	return regulator_suspend_begin(target_state);
 }
 
 /*
@@ -171,14 +171,29 @@ static int at91_suspend_finish(unsigned long val)
 static void at91_pm_suspend(suspend_state_t state)
 {
 	pm_args.memctrl = at91_pm_data.memctrl;
+	pm_args.mode = 0;
 
-	if (state == PM_SUSPEND_MEM) {
+	if (at91_pm_data.deepest_state == AT91_PM_BACKUP) {
+		if (state == PM_SUSPEND_MEM) {
+			/* The SRAM is lost between suspend cycles */
+			at91_suspend_sram_fn = fncpy(at91_suspend_sram_fn,
+						     &at91_pm_suspend_in_sram,
+						     at91_pm_suspend_in_sram_sz);
+			pm_args.mode = AT91_PM_BACKUP;
+			pm_bu->suspended = 1;
+		} else {
+			pm_args.mode = AT91_PM_SLOW_CLOCK;
+		}
+	} else if (state == PM_SUSPEND_MEM) {
 		pm_args.mode = AT91_PM_SLOW_CLOCK;
 		if (at91_pm_data.ulp_mode == ULP1_MODE)
 			pm_args.ulp_mode = AT91_PM_ULP1_MODE;
 	}
 
-	at91_suspend_finish(0);
+	if (pm_args.mode == AT91_PM_BACKUP)
+		cpu_suspend(0, at91_suspend_finish);
+	else
+		at91_suspend_finish(0);
 
 	outer_resume();
 }
@@ -415,7 +430,7 @@ static __init void at91_dt_shdwc(void)
 	np = of_find_compatible_node(NULL, NULL, "atmel,sama5d2-sfrbu");
 	if (!np)
 		return;
-	
+
 	pm_args.sfrbu = of_iomap(np, 0);
 	of_node_put(np);
 }
@@ -517,7 +532,6 @@ static void __init at91_pm_bu_sram_init(void)
 	pm_bu->suspended = 0;
 	pm_bu->canary = virt_to_phys(&canary);
 	pm_bu->resume = virt_to_phys(cpu_resume);
-	pm_bu->canary2 = virt_to_phys(&canary);
 }
 
 static const struct of_device_id atmel_pmc_ids[] __initconst = {
@@ -556,6 +570,7 @@ static void __init at91_pm_init(void (*pm_idle)(void))
 		pr_info("AT91: PM not supported, due to no SRAM allocated\n");
 }
 
+#ifndef CONFIG_AT91_BSR
 static int __init at91_pmc_fast_startup_init(void)
 {
 	struct device_node *np, *cnp;
@@ -617,6 +632,7 @@ static int __init at91_pmc_fast_startup_init(void)
 
 	return 0;
 }
+#endif /* CONFIG_AT91_BSR */
 
 void __init at91rm9200_pm_init(void)
 {
@@ -669,10 +685,12 @@ void __init sama5d2_pm_init(void)
 {
 	at91_dt_shdwc();
 	at91_pm_bu_sram_init();
+#ifdef CONFIG_AT91_BSR
 	at91_pm_data.deepest_state = AT91_PM_BACKUP;
-
+#endif
 	sama5_pm_init();
-
+#ifndef CONFIG_AT91_BSR
 	at91_pm_data.ulp_mode = ULP1_MODE;
 	at91_pmc_fast_startup_init();
+#endif
  }
