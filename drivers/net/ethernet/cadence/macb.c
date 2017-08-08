@@ -3191,9 +3191,11 @@ static int __maybe_unused macb_suspend(struct device *dev)
 		macb_writel(bp, WOL, MACB_BIT(MAG));
 		enable_irq_wake(bp->queues[0].irq);
 	} else {
+#if CONFIG_AT91_BSR
 		if (netif_running(netdev)) {
 			macb_close(netdev);
 		}
+#endif
 		clk_disable_unprepare(bp->tx_clk);
 		clk_disable_unprepare(bp->hclk);
 		clk_disable_unprepare(bp->pclk);
@@ -3219,6 +3221,7 @@ static int __maybe_unused macb_resume(struct device *dev)
 		clk_prepare_enable(bp->tx_clk);
 		clk_prepare_enable(bp->rx_clk);
 
+#ifdef CONFIG_AT91_BSR
 		macb_or_gem_writel(bp, USRIO, bp->suspend.usrio);
 		macb_writel(bp, NCFGR, bp->suspend.ncfgr);
 
@@ -3229,6 +3232,7 @@ static int __maybe_unused macb_resume(struct device *dev)
 
 		macb_set_rx_mode(netdev);
 		macb_restore_features(netdev);
+#endif
 	}
 
 	netif_device_attach(netdev);
