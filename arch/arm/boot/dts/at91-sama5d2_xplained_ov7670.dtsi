@@ -74,8 +74,8 @@
 					clock-names = "xclk";
 					assigned-clocks = <&isc>;
 					assigned-clock-rates = <24000000>;
-					resetb-gpios = <&pioA 43 GPIO_ACTIVE_LOW>;
-					pwdn-gpios = <&pioA 44 GPIO_ACTIVE_HIGH>;
+					reset-gpios = <&pioA 43 GPIO_ACTIVE_LOW>;
+					powerdown-gpios = <&pioA 44 GPIO_ACTIVE_HIGH>;
 
 					port {
 						ov7670_0: endpoint {
