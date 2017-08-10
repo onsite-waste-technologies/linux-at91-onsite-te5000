@@ -73,9 +73,11 @@ static int wilc_sdio_cmd52(struct wilc *wilc, struct sdio_cmd52 *cmd)
 
 	sdio_release_host(func);
 
-	if (ret)
-		dev_err(&func->dev, "%s..failed, err(%d)\n", __func__, ret);
-	return ret;
+	if (ret < 0) {
+		dev_err(&func->dev, "wilc_sdio_cmd52..failed, err(%d)\n", ret);
+		return 0;
+	}
+	return 1;
 }
 
 static int wilc_sdio_cmd53(struct wilc *wilc, struct sdio_cmd53 *cmd)
@@ -102,10 +104,12 @@ static int wilc_sdio_cmd53(struct wilc *wilc, struct sdio_cmd53 *cmd)
 
 	sdio_release_host(func);
 
-	if (ret)
-		dev_err(&func->dev, "%s..failed, err(%d)\n", __func__,  ret);
+	if (ret < 0) {
+		dev_err(&func->dev, "wilc_sdio_cmd53..failed, err(%d)\n", ret);
+		return 0;
+	}
 
-	return ret;
+	return 1;
 }
 
 static int linux_sdio_probe(struct sdio_func *func,
@@ -164,7 +168,7 @@ static int sdio_reset(struct wilc *wilc)
 	cmd.address = 0x6;
 	cmd.data = 0x8;
 	ret = wilc_sdio_cmd52(wilc, &cmd);
-	if (ret) {
+	if (!ret) {
 		dev_err(&func->dev, "Fail cmd 52, reset cmd ...\n");
 		return ret;
 	}
