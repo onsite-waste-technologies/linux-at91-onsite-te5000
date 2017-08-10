@@ -303,6 +303,10 @@ static int wilc_enqueue_cmd(struct host_if_msg *msg)
 		return -ENOMEM;
 
 	INIT_WORK(&new_msg->work, host_if_work);
+
+	if(!hif_workqueue)
+		return -EFAULT;
+
 	queue_work(hif_workqueue, &new_msg->work);
 	return 0;
 }
@@ -911,6 +915,11 @@ static s32 Handle_ScanDone(struct wilc_vif *vif,
 	struct wid wid;
 	struct host_if_drv *hif_drv = vif->hif_drv;
 
+	if (!hif_drv) {
+		netdev_err(vif->ndev, "Driver handler is NULL\n");
+		return result;
+	}
+
 	if (enuEvent == SCAN_EVENT_ABORTED) {
 		u8abort_running_scan = 1;
 		wid.id = (u16)WID_ABORT_RUNNING_SCAN;
@@ -925,11 +934,6 @@ static s32 Handle_ScanDone(struct wilc_vif *vif,
 			netdev_err(vif->ndev, "Failed to set abort running\n");
 			result = -EFAULT;
 		}
-	}
-
-	if (!hif_drv) {
-		netdev_err(vif->ndev, "Driver handler is NULL\n");
-		return result;
 	}
 
 	if (hif_drv->usr_scan_req.scan_result) {
@@ -1117,9 +1121,9 @@ static s32 Handle_Connect(struct wilc_vif *vif,
 		*(pu8CurrByte++) = ((ptstrJoinBssParam->tsf) >> 16) & 0xFF;
 		*(pu8CurrByte++) = ((ptstrJoinBssParam->tsf) >> 24) & 0xFF;
 
-		*(pu8CurrByte++) = ptstrJoinBssParam->opp_enabled;
 		*(pu8CurrByte++) = ptstrJoinBssParam->idx;
-
+		*(pu8CurrByte++) = ptstrJoinBssParam->opp_enabled;
+		
 		if (ptstrJoinBssParam->opp_enabled)
 			*(pu8CurrByte++) = ptstrJoinBssParam->ct_window;
 
@@ -2000,7 +2004,7 @@ static s32 Handle_Get_InActiveTime(struct wilc_vif *vif,
 	wid.val = kmalloc(wid.size, GFP_KERNEL);
 
 	stamac = wid.val;
-	memcpy(stamac, strHostIfStaInactiveT->mac, ETH_ALEN);
+	ether_addr_copy(stamac, strHostIfStaInactiveT->mac);
 
 	result = wilc_send_config_pkt(vif, SET_CFG, &wid, 1,
 				      wilc_get_vif_idx(vif));
@@ -2222,7 +2226,7 @@ static void Handle_DelStation(struct wilc_vif *vif,
 
 	pu8CurrByte = wid.val;
 
-	memcpy(pu8CurrByte, pstrDelStaParam->mac_addr, ETH_ALEN);
+	ether_addr_copy(pu8CurrByte, pstrDelStaParam->mac_addr);
 
 	result = wilc_send_config_pkt(vif, SET_CFG, &wid, 1,
 				      wilc_get_vif_idx(vif));
@@ -3427,10 +3431,11 @@ static void GetPeriodicRSSI(unsigned long arg)
 		return;
 	}
 
-	if (vif->hif_drv->hif_state == HOST_IF_CONNECTED)
+	if (vif->hif_drv->hif_state == HOST_IF_CONNECTED && (!wilc_optaining_ip))
 		wilc_get_statistics(vif, &vif->wilc->dummy_statistics);
 
 	periodic_rssi.data = (unsigned long)vif;
+	if(!wilc_optaining_ip)
 	mod_timer(&periodic_rssi, jiffies + msecs_to_jiffies(5000));
 }
 
@@ -3556,8 +3561,9 @@ int wilc_deinit(struct wilc_vif *vif)
 			netdev_err(vif->ndev, "deinit : Error(%d)\n", result);
 		else
 			wait_for_completion(&hif_thread_comp);
-
+		flush_workqueue(hif_workqueue);
 		destroy_workqueue(hif_workqueue);
+		hif_workqueue = NULL;
 	}
 
 	kfree(hif_drv);
@@ -3946,6 +3952,9 @@ int wilc_set_power_mgmt(struct wilc_vif *vif, bool enabled, u32 timeout)
 	pwr_mgmt_info->enabled = enabled;
 	pwr_mgmt_info->timeout = timeout;
 
+	if(!hif_workqueue)
+		return 0;
+
 	result = wilc_enqueue_cmd(&msg);
 	if (result)
 		netdev_err(vif->ndev, "wilc_mq_send fail\n");
@@ -4129,6 +4138,8 @@ int wilc_setup_ipaddress(struct wilc_vif *vif, u8 *ip_addr, u8 idx)
 	memset(&msg, 0, sizeof(struct host_if_msg));
 
 	msg.id = HOST_IF_MSG_SET_IPADDRESS;
+	if(!hif_workqueue)
+		return 0;
 
 	msg.body.ip_info.ip_addr = ip_addr;
 	msg.vif = vif;
