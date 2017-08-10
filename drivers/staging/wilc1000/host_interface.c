@@ -465,7 +465,6 @@ static void handle_set_ip_address(struct wilc_vif *vif, u8 *ip_addr, u8 idx)
 {
 	int ret = 0;
 	struct wid wid;
-	char firmware_ip_addr[4] = {0};
 
 	if (ip_addr[0] < 192)
 		ip_addr[0] = 0;
@@ -474,13 +473,12 @@ static void handle_set_ip_address(struct wilc_vif *vif, u8 *ip_addr, u8 idx)
 
 	wid.id = (u16)WID_IP_ADDRESS;
 	wid.type = WID_STR;
-	wid.val = ip_addr;
+	wid.val = (u8 *)ip_addr;
 	wid.size = IP_ALEN;
 
 	ret = wilc_send_config_pkt(vif, SET_CFG, &wid, 1,
 				   wilc_get_vif_idx(vif));
 
-	host_int_get_ipaddress(vif, firmware_ip_addr, idx);
 
 	if (ret)
 		netdev_err(vif->ndev, "Failed to set IP address\n");

@@ -343,7 +343,6 @@ static  void ac_q_limit(struct wilc *wilc, u8 ac, u16 *q_limit)
 	static u8 buffer[AC_BUFFER_SIZE];
 	static u16 end_index;
 	static bool initialized;
-	static u8 buffer[AC_BUFFER_SIZE];
 	static u16 cnt[NQUEUES];
 	u8 factors[NQUEUES] = {1, 1, 1, 1};
 	static u16 sum;
@@ -1020,7 +1019,6 @@ int wilc_wlan_handle_txq(struct net_device *dev, u32 *txq_count)
 		}
 
 		release_bus(wilc, RELEASE_ALLOW_SLEEP);
-		schedule();
 		offset = 0;
 		i = 0;
 		do {

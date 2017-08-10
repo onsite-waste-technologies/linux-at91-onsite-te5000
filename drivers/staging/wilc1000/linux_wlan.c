@@ -45,6 +45,8 @@ static void linux_wlan_tx_complete(void *priv, int status);
 static int  mac_init_fn(struct net_device *ndev);
 static struct net_device_stats *mac_stats(struct net_device *dev);
 static int  mac_ioctl(struct net_device *ndev, struct ifreq *req, int cmd);
+static int wilc_mac_open(struct net_device *ndev);
+static int wilc_mac_close(struct net_device *ndev);
 static void wilc_set_multicast_list(struct net_device *dev);
 
 bool wilc_enable_ps = true;
@@ -96,13 +98,8 @@ static int dev_state_ev_handler(struct notifier_block *this,
 	case NETDEV_UP:
 		if (vif->iftype == STATION_MODE || vif->iftype == CLIENT_MODE) {
 			hif_drv->IFC_UP = 1;
-			wilc_optaining_ip = false;
 			del_timer(&wilc_during_ip_timer);
 		}
-
-		if (wilc_enable_ps)
-			wilc_set_power_mgmt(vif, 1, 0);
-
 		netdev_dbg(dev, "[%s] Up IP\n", dev_iface->ifa_label);
 
 		ip_addr_buf = (char *)&dev_iface->ifa_address;
@@ -111,17 +108,22 @@ static int dev_state_ev_handler(struct notifier_block *this,
 			   ip_addr_buf[2], ip_addr_buf[3]);
 		wilc_setup_ipaddress(vif, ip_addr_buf, vif->idx);
 
+		if (wilc_enable_ps && (ip_addr_buf[0] != 169)){
+			msleep(500);
+			wilc_set_power_mgmt(vif, 1, 0);
+			wilc_optaining_ip = false;
+		}
 		break;
 
 	case NETDEV_DOWN:
 		if (vif->iftype == STATION_MODE || vif->iftype == CLIENT_MODE) {
 			hif_drv->IFC_UP = 0;
-			wilc_optaining_ip = false;
 		}
 
-		if (memcmp(dev_iface->ifa_label, wlan_dev_name, 5) == 0)
+		if (memcmp(dev_iface->ifa_label, wlan_dev_name,5) == 0){
 			wilc_set_power_mgmt(vif, 0, 0);
-
+			wilc_optaining_ip = false;
+		}
 		wilc_resolve_disconnect_aberration(vif);
 
 		netdev_dbg(dev, "[%s] Down IP\n", dev_iface->ifa_label);
@@ -203,7 +205,7 @@ static int init_irq(struct net_device *dev)
 		gpio_free(wl->gpio);
 		ret = -1;
 	} else {
-		netdev_dbg(dev,
+		netdev_info(dev,
 			   "IRQ request succeeded IRQ-NUM= %d on GPIO: %d\n",
 			   wl->dev_irq_num, wl->gpio);
 	}
@@ -332,8 +334,8 @@ int wilc_wlan_set_bssid(struct net_device *wilc_netdev, u8 *bssid, u8 mode)
 {
 	struct wilc_vif *vif = netdev_priv(wilc_netdev);
 	struct wilc *wilc;
+	u8 i = 0;
 
-	vif = netdev_priv(wilc_netdev);
 	wilc = vif->wilc;
 
 	for (i = 0; i <= wilc->vif_num; i++){
@@ -908,7 +910,7 @@ static int mac_init_fn(struct net_device *ndev)
 	return 0;
 }
 
-int wilc_mac_open(struct net_device *ndev)
+static int wilc_mac_open(struct net_device *ndev)
 {
 	struct wilc_vif *vif;
 
@@ -931,7 +933,7 @@ int wilc_mac_open(struct net_device *ndev)
 	if (ret < 0)
 		return ret;
 
-	ret = wilc1000_wlan_init(ndev, vif);
+	ret = wilc_wlan_initialize(ndev, vif);
 	if (ret < 0) {
 		wilc_deinit_host_int(ndev);
 		return ret;
@@ -939,7 +941,9 @@ int wilc_mac_open(struct net_device *ndev)
 
 	for (i = 0; i <= wl->vif_num; i++) {
 		if (ndev == wl->vif[i]->ndev) {
-			wilc_set_wfi_drv_handler(vif, wilc_get_vif_idx(vif),
+
+			wilc_set_wfi_drv_handler(vif,
+						 wilc_get_vif_idx(vif),
 						 vif->iftype, vif->ifc_id);
 			wilc_set_operation_mode(vif, vif->iftype);
 			break;
@@ -1137,7 +1141,7 @@ static int mac_ioctl(struct net_device *ndev, struct ifreq *req, int cmd)
 {
 	u8 *buff = NULL;
 	s8 rssi;
-	u32 size = 0;
+	u32 size = 0, length = 0;
 	struct wilc_vif *vif;
 	s32 ret = 0;
 	struct wilc *wilc;
@@ -1161,7 +1165,7 @@ static int mac_ioctl(struct net_device *ndev, struct ifreq *req, int cmd)
 			if (IS_ERR(buff))
 				return PTR_ERR(buff);
 
-			if (strncasecmp(buff, "RSSI", size) == 0) {
+			if (strncasecmp(buff, "RSSI", length) == 0) {
 				ret = wilc_get_rssi(vif, &rssi);
 				netdev_info(ndev, "RSSI :%d\n", rssi);
 

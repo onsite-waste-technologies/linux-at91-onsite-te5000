@@ -223,7 +223,7 @@ static void refresh_scan(void *user_void, u8 all, bool direct_scan)
 	int i;
 	int rssi = 0;
 
-	priv = user_void;
+	priv = (struct wilc_priv *)user_void;
 	wiphy = priv->dev->ieee80211_ptr->wiphy;
 
 	for (i = 0; i < last_scanned_cnt; i++) {
@@ -389,7 +389,7 @@ static void CfgScanResult(enum scan_event scan_event,
 	struct ieee80211_channel *channel;
 	struct cfg80211_bss *bss = NULL;
 
-	priv = user_void;
+	priv = (struct wilc_priv *)user_void;
 	if (priv->bCfgScanning) {
 		if (scan_event == SCAN_EVENT_NETWORK_FOUND) {
 			wiphy = priv->dev->ieee80211_ptr->wiphy;
