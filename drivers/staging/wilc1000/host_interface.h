@@ -297,7 +297,12 @@ struct add_sta_param {
 	u8 rates_len;
 	const u8 *rates;
 	bool ht_supported;
-	struct ieee80211_ht_cap ht_capa;
+	u16 ht_capa_info;
+	u8 ht_ampdu_params;
+	u8 ht_supp_mcs_set[16];
+	u16 ht_ext_params;
+	u32 ht_tx_bf_cap;
+	u8 ht_ante_sel;
 	u16 flags_mask;
 	u16 flags_set;
 };
@@ -398,5 +403,6 @@ extern int wilc_connecting;
 extern u8 wilc_initialized;
 extern struct timer_list eap_buff_timer;
 extern struct timer_list wilc_during_ip_timer;
+s32 Handle_ScanDone(struct wilc_vif *vif, enum scan_event enuEvent);
 
 #endif
