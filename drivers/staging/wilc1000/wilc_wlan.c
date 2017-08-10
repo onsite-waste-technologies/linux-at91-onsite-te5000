@@ -1391,6 +1391,14 @@ int wilc_wlan_start(struct wilc *wilc)
 	reg |= WILC_HAVE_DISABLE_WILC_UART;
 #endif
 
+#ifdef ANT_SWTCH_SNGL_GPIO_CTRL
+	        reg |= WILC_HAVE_ANT_SWTCH_SNGL_GPIO_CTRL;
+#elif 1
+//defined(ANT_SWTCH_DUAL_GPIO_CTRL)
+	        reg |= WILC_HAVE_ANT_SWTCH_SNGL_GPIO_CTRL;
+	        reg |= WILC_HAVE_ANT_SWTCH_DUAL_GPIO_CTRL;
+#endif
+
 	ret = wilc->hif_func->hif_write_reg(wilc, WILC_GP_REG_1, reg);
 	if (!ret) {
 		release_bus(wilc, RELEASE_ONLY);

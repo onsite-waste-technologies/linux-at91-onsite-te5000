@@ -224,6 +224,7 @@ union message_body {
 	struct del_all_sta del_all_sta_info;
 	struct send_buffered_eap send_buff_eap;
 	struct tx_power tx_power;
+	struct host_if_set_ant set_ant;
 #ifdef WILC_BT_COEXISTENCE
 	struct bt_coex_mode bt_coex_mode;
 #endif /* WILC_BT_COEXISTENCE */
@@ -2573,17 +2574,18 @@ static void handle_get_tx_pwr(struct wilc_vif *vif, u8 *tx_pwr)
 	complete(&hif_wait_response);
 }
 
-static int handle_set_antenna_mode(struct wilc_vif *vif, u8 mode)
+static int handle_set_antenna_mode(struct wilc_vif *vif, struct host_if_set_ant
+				   *set_ant)
 {
 	int ret = 0;
 	struct wid wid;
 
 	wid.id = (u16)WID_ANTENNA_SELECTION;
-	wid.type = WID_CHAR;
-	wid.val = &mode;
-	wid.size = sizeof(char);
+	wid.type = WID_BIN;
+	wid.val = (u8 *)set_ant;
+	wid.size = sizeof(struct host_if_set_ant);
 
-	netdev_dbg(vif->ndev, "set antenna %d\n", mode);
+	netdev_dbg(vif->ndev, "set antenna %d\n", set_ant->mode);
 
 	ret = wilc_send_config_pkt(vif, SET_CFG, &wid, 1,
 				   wilc_get_vif_idx(vif));
@@ -2766,7 +2768,7 @@ static void host_if_work(struct work_struct *work)
 		break;
 
 	case HOST_IF_MSG_SET_ANTENNA_MODE:
-		handle_set_antenna_mode(msg->vif, &msg->body.antenna_mode);
+		handle_set_antenna_mode(msg->vif, &msg->body.set_ant);
 		break;
 
 	default:
@@ -4289,7 +4291,8 @@ int wilc_get_tx_power(struct wilc_vif *vif, u8 *tx_power)
 
 	return ret;
 }
-
+#define ANT1_GPIO_NUM 4
+#define ANT2_GPIO_NUM 6
 int wilc_set_antenna(struct wilc_vif *vif, u8 mode)
 {
 	int ret = 0;
@@ -4298,8 +4301,11 @@ int wilc_set_antenna(struct wilc_vif *vif, u8 mode)
 	memset(&msg, 0, sizeof(struct host_if_msg));
 
 	msg.id = HOST_IF_MSG_SET_ANTENNA_MODE;
+
 	msg.vif = vif;
-	msg.body.antenna_mode = mode;
+	msg.body.set_ant.mode = mode;
+	msg.body.set_ant.antenna1 = ANT1_GPIO_NUM;
+	msg.body.set_ant.antenna2 = ANT2_GPIO_NUM;
 
 	ret = wilc_enqueue_cmd(&msg);
 	if(ret)
