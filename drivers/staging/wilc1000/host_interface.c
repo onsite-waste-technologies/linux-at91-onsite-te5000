@@ -279,7 +279,7 @@ u8 wilc_multicast_mac_addr_list[WILC_MULTICAST_TABLE_SIZE][ETH_ALEN];
 
 static u8 rcv_assoc_resp[MAX_ASSOC_RESP_FRAME_SIZE];
 
-static bool scan_while_connected;
+bool scan_while_connected;
 
 static s8 rssi;
 static u8 set_ip[2][4];
@@ -301,7 +301,7 @@ static struct wilc_vif *join_req_vif;
 
 static void *host_int_ParseJoinBssParam(struct network_info *ptstrNetworkInfo);
 static int host_int_get_ipaddress(struct wilc_vif *vif, u8 *ip_addr, u8 idx);
-static s32 Handle_ScanDone(struct wilc_vif *vif, enum scan_event enuEvent);
+s32 Handle_ScanDone(struct wilc_vif *vif, enum scan_event enuEvent);
 static void host_if_work(struct work_struct *work);
 
 /*!
@@ -957,7 +957,7 @@ ERRORHANDLER:
 	return result;
 }
 
-static s32 Handle_ScanDone(struct wilc_vif *vif,
+s32 Handle_ScanDone(struct wilc_vif *vif,
 			   enum scan_event enuEvent)
 {
 	s32 result = 0;
@@ -3539,7 +3539,7 @@ int wilc_init(struct net_device *dev, struct host_if_drv **hif_drv_handler)
 		goto _fail_;
 	}
 	*hif_drv_handler = hif_drv;
-	for (i = 0; i < wilc->vif_num; i++)
+	for (i = 0; i <= wilc->vif_num; i++)
 		if (dev == wilc->vif[i]->ndev) {
 			wilc->vif[i]->hif_drv = hif_drv;
 			hif_drv->driver_handler_id = i + 1;

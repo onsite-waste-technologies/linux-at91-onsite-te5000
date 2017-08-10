@@ -105,9 +105,6 @@ static int wilc_wlan_txq_add_to_head(struct wilc_vif *vif, u8 q_num,
 {
 	unsigned long flags;
 	struct wilc *wilc = vif->wilc;
-
-	mutex_lock(&wilc->txq_add_to_head_cs);
-
 	spin_lock_irqsave(&wilc->txq_spinlock, flags);
 
 	if (!wilc->txq[q_num].txq_head) {
@@ -125,7 +122,6 @@ static int wilc_wlan_txq_add_to_head(struct wilc_vif *vif, u8 q_num,
 	wilc->txq[q_num].count++;
 
 	spin_unlock_irqrestore(&wilc->txq_spinlock, flags);
-	mutex_unlock(&wilc->txq_add_to_head_cs);
 	complete(&wilc->txq_event);
 
 	return 0;
@@ -322,7 +318,7 @@ static int wilc_wlan_txq_add_cfg_pkt(struct wilc_vif *vif, u8 *buffer,
 		return 0;
 	}
 
-	tqe = kmalloc(sizeof(*tqe), GFP_ATOMIC);
+	tqe = kmalloc(sizeof(*tqe), GFP_KERNEL);
 	if (!tqe)
 		return 0;
 
@@ -1235,7 +1231,8 @@ _end_:
 			}
 		}
 	}
-	wilc_wlan_handle_rxq(wilc);
+	if (ret)
+		wilc_wlan_handle_rxq(wilc);
 }
 
 void wilc_handle_isr(struct wilc *wilc)

@@ -89,16 +89,12 @@ static const struct wiphy_wowlan_support wowlan_support = {
 #define IS_MGMT_STATUS_SUCCES			0x040
 #define GET_PKT_OFFSET(a) (((a) >> 22) & 0x1ff)
 
-extern int wilc_mac_open(struct net_device *ndev);
-extern int wilc_mac_close(struct net_device *ndev);
-
 static struct network_info last_scanned_shadow[MAX_NUM_SCANNED_NETWORKS_SHADOW];
 static u32 last_scanned_cnt;
 struct timer_list wilc_during_ip_timer;
 static struct timer_list hAgingTimer;
 static u8 op_ifcs;
 struct timer_list eap_buff_timer;
-u8 wilc_initialized = 1;
 
 #define CHAN2G(_channel, _freq, _flags) {	 \
 		.band             = NL80211_BAND_2GHZ, \
@@ -1856,6 +1852,8 @@ static int change_virtual_intf(struct wiphy *wiphy, struct net_device *dev,
 		priv->wdev->iftype = type;
 		vif->monitor_flag = 0;
 		vif->iftype = STATION_MODE;
+		wilc_set_wfi_drv_handler(vif, wilc_get_vif_idx(vif),
+					 STATION_MODE, vif->ifc_id);
 		wilc_set_operation_mode(vif, STATION_MODE);
 
 		memset(priv->assoc_stainfo.au8Sta_AssociatedBss, 0, MAX_NUM_STA * ETH_ALEN);
@@ -1870,6 +1868,8 @@ static int change_virtual_intf(struct wiphy *wiphy, struct net_device *dev,
 		priv->wdev->iftype = type;
 		vif->monitor_flag = 0;
 		vif->iftype = CLIENT_MODE;
+		wilc_set_wfi_drv_handler(vif, wilc_get_vif_idx(vif),
+					 STATION_MODE, vif->ifc_id);
 		wilc_set_operation_mode(vif, STATION_MODE);
 
 		wilc_enable_ps = false;
@@ -1884,7 +1884,7 @@ static int change_virtual_intf(struct wiphy *wiphy, struct net_device *dev,
 
 		if (wl->initialized) {
 			wilc_set_wfi_drv_handler(vif, wilc_get_vif_idx(vif),
-						 0, vif->ifc_id);
+						 AP_MODE, vif->ifc_id);
 			wilc_set_operation_mode(vif, AP_MODE);
 			wilc_set_power_mgmt(vif, 0, 0);
 		}
@@ -1894,6 +1894,8 @@ static int change_virtual_intf(struct wiphy *wiphy, struct net_device *dev,
 		wilc_optaining_ip = true;
 		mod_timer(&wilc_during_ip_timer,
 			  jiffies + msecs_to_jiffies(during_ip_time));
+		wilc_set_wfi_drv_handler(vif, wilc_get_vif_idx(vif),
+					 AP_MODE, vif->ifc_id);
 		wilc_set_operation_mode(vif, AP_MODE);
 		dev->ieee80211_ptr->iftype = type;
 		priv->wdev->iftype = type;

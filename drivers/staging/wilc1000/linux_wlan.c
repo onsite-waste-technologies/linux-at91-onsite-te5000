@@ -314,8 +314,7 @@ static struct net_device *get_if_handler(struct wilc *wilc, u8 *mac_header)
 
 	bssid = mac_header + 10;
 	bssid1 = mac_header + 4;
-
-	for (i = 0; i < wilc->vif_num; i++) {
+	for (i = 0; i <= wilc->vif_num; i++) {
 		if (wilc->vif[i]->mode == STATION_MODE)
 			if (ether_addr_equal_unaligned(bssid,
 						       wilc->vif[i]->bssid))
@@ -331,23 +330,19 @@ static struct net_device *get_if_handler(struct wilc *wilc, u8 *mac_header)
 
 int wilc_wlan_set_bssid(struct net_device *wilc_netdev, u8 *bssid, u8 mode)
 {
-	int i = 0;
-	int ret = -1;
-	struct wilc_vif *vif;
+	struct wilc_vif *vif = netdev_priv(wilc_netdev);
 	struct wilc *wilc;
 
 	vif = netdev_priv(wilc_netdev);
 	wilc = vif->wilc;
 
-	for (i = 0; i < wilc->vif_num; i++)
-		if (wilc->vif[i]->ndev == wilc_netdev) {
+	for (i = 0; i <= wilc->vif_num; i++){
+		if (wilc_netdev == wilc->vif[i]->ndev) {
 			memcpy(wilc->vif[i]->bssid, bssid, 6);
 			wilc->vif[i]->mode = mode;
-			ret = 0;
-			break;
 		}
-
-	return ret;
+	}
+	return 0;
 }
 
 int wilc_wlan_get_num_conn_ifcs(struct wilc *wilc)
@@ -356,7 +351,7 @@ int wilc_wlan_get_num_conn_ifcs(struct wilc *wilc)
 	u8 null_bssid[6] = {0};
 	u8 ret_val = 0;
 
-	for (i = 0; i < wilc->vif_num; i++)
+	for (i = 0; i <= wilc->vif_num; i++)
 		if (memcmp(wilc->vif[i]->bssid, null_bssid, 6))
 			ret_val++;
 
@@ -505,9 +500,9 @@ static int linux_wlan_init_test_config(struct net_device *dev,
 	netdev_dbg(dev, "Host = %p\n", hif_drv);
 	wilc_get_chipid(wilc, false);
 
-	*(int *)c_val = 1;
+	*(int *)c_val = (unsigned int)vif->iftype;
 
-	if (!wilc_wlan_cfg_set(vif, 1, WID_SET_DRV_HANDLER, c_val, 4, 0, 0))
+	if (!wilc_wlan_cfg_set(vif, 1, WID_SET_OPERATION_MODE, c_val, 4, 0, 0))
 		goto _fail_;
 
 	c_val[0] = 0;
@@ -527,14 +522,10 @@ static int linux_wlan_init_test_config(struct net_device *dev,
 			       0))
 		goto _fail_;
 
-	c_val[0] = 1;
-	if (!wilc_wlan_cfg_set(vif, 0, WID_CURRENT_CHANNEL, c_val, 1, 0, 0))
-		goto _fail_;
-
-	c_val[0] = G_SHORT_PREAMBLE;
+	c_val[0] = G_AUTO_PREAMBLE;
 	if (!wilc_wlan_cfg_set(vif, 0, WID_PREAMBLE, c_val, 1, 0, 0))
 		goto _fail_;
-
+	
 	c_val[0] = AUTO_PROT;
 	if (!wilc_wlan_cfg_set(vif, 0, WID_11N_PROT_MECH, c_val, 1, 0, 0))
 		goto _fail_;
@@ -567,7 +558,7 @@ static int linux_wlan_init_test_config(struct net_device *dev,
 	if (!wilc_wlan_cfg_set(vif, 0, WID_POWER_MANAGEMENT, c_val, 1, 0, 0))
 		goto _fail_;
 
-	c_val[0] = NO_SECURITY; /* NO_ENCRYPT, 0x79 */
+	c_val[0] = 0;
 	if (!wilc_wlan_cfg_set(vif, 0, WID_11I_MODE, c_val, 1, 0, 0))
 		goto _fail_;
 
@@ -677,11 +668,7 @@ static int linux_wlan_init_test_config(struct net_device *dev,
 	if (!wilc_wlan_cfg_set(vif, 0, WID_11N_RIFS_PROT_ENABLE, c_val, 1, 0,
 			       0))
 		goto _fail_;
-
-	c_val[0] = MIMO_MODE;
-	if (!wilc_wlan_cfg_set(vif, 0, WID_11N_SMPS_MODE, c_val, 1, 0, 0))
-		goto _fail_;
-
+	
 	c_val[0] = 7;
 	if (!wilc_wlan_cfg_set(vif, 0, WID_11N_CURRENT_TX_MCS, c_val, 1, 0,
 			       0))
@@ -689,7 +676,7 @@ static int linux_wlan_init_test_config(struct net_device *dev,
 
 	c_val[0] = 1;
 	if (!wilc_wlan_cfg_set(vif, 0, WID_11N_IMMEDIATE_BA_ENABLED, c_val, 1,
-			       1, 1))
+			       1, 0))
 		goto _fail_;
 
 	return 0;
@@ -950,7 +937,7 @@ int wilc_mac_open(struct net_device *ndev)
 		return ret;
 	}
 
-	for (i = 0; i < wl->vif_num; i++) {
+	for (i = 0; i <= wl->vif_num; i++) {
 		if (ndev == wl->vif[i]->ndev) {
 			wilc_set_wfi_drv_handler(vif, wilc_get_vif_idx(vif),
 						 vif->iftype, vif->ifc_id);
@@ -1290,7 +1277,7 @@ void WILC_WFI_mgmt_rx(struct wilc *wilc, u8 *buff, u32 size)
 	int i = 0;
 	struct wilc_vif *vif;
 
-	for (i = 0; i < wilc->vif_num; i++) {
+	for (i = 0; i <= wilc->vif_num; i++) {
 		vif = netdev_priv(wilc->vif[i]->ndev);
 		if (vif->monitor_flag) {
 			WILC_WFI_monitor_rx(buff, size);
@@ -1306,15 +1293,10 @@ void WILC_WFI_mgmt_rx(struct wilc *wilc, u8 *buff, u32 size)
 
 void wilc_netdev_cleanup(struct wilc *wilc)
 {
-	int i = 0;
-	struct wilc_vif *vif[NUM_CONCURRENT_IFC];
+	int i;
 
-	if (wilc && (wilc->vif[0]->ndev || wilc->vif[1]->ndev)) {
+	if (wilc && (wilc->vif[0]->ndev || wilc->vif[1]->ndev))
 		unregister_inetaddr_notifier(&g_dev_notifier);
-
-		for (i = 0; i < NUM_CONCURRENT_IFC; i++)
-			vif[i] = netdev_priv(wilc->vif[i]->ndev);
-	}
 
 	if (wilc && wilc->firmware) {
 		release_firmware(wilc->firmware);
@@ -1324,7 +1306,7 @@ void wilc_netdev_cleanup(struct wilc *wilc)
 	if (wilc && (wilc->vif[0]->ndev || wilc->vif[1]->ndev)) {
 		for (i = 0; i < NUM_CONCURRENT_IFC; i++)
 			if (wilc->vif[i]->ndev)
-				if (vif[i]->mac_opened)
+				if (wilc->vif[i]->mac_opened)
 					wilc_mac_close(wilc->vif[i]->ndev);
 
 		for (i = 0; i < NUM_CONCURRENT_IFC; i++) {
