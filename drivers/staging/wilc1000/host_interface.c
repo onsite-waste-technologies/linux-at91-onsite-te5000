@@ -235,6 +235,7 @@ struct host_if_msg {
 	union message_body body;
 	struct wilc_vif *vif;
 	struct work_struct work;
+	void *drv_handler;
 };
 
 struct join_bss_param {
