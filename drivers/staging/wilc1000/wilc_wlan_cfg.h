@@ -30,6 +30,11 @@ struct wilc_cfg_str {
 	u8 *str;
 };
 
+struct wilc_cfg_bin {
+	u32 id;
+	u8 *bin;
+};
+
 struct wilc;
 int wilc_wlan_cfg_set_wid(u8 *frame, u32 offset, u16 id, u8 *buf, int size);
 int wilc_wlan_cfg_get_wid(u8 *frame, u32 offset, u16 id);
