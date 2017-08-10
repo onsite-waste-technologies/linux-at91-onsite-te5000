@@ -338,16 +338,18 @@ static int wilc_wlan_txq_add_cfg_pkt(struct wilc_vif *vif, u8 *buffer,
 	return 1;
 }
 
-static inline void ac_q_limit(u8 ac, u16 *q_limit)
+static  void ac_q_limit(struct wilc *wilc, u8 ac, u16 *q_limit)
 {
+	static u8 buffer[AC_BUFFER_SIZE];
+	static u16 end_index;
 	static bool initialized;
 	static u8 buffer[AC_BUFFER_SIZE];
 	static u16 cnt[NQUEUES];
 	u8 factors[NQUEUES] = {1, 1, 1, 1};
 	static u16 sum;
 	u16 i;
-	static u16 end_index;
 
+	spin_lock_irqsave(&wilc->txq_spinlock, wilc->txq_spinlock_flags);
 	if (!initialized) {
 		for (i = 0; i < AC_BUFFER_SIZE; i++)
 			buffer[i] = i % NQUEUES;
@@ -359,7 +361,7 @@ static inline void ac_q_limit(u8 ac, u16 *q_limit)
 		end_index = AC_BUFFER_SIZE - 1;
 		initialized = 1;
 	}
-	if (end_index > AC_BUFFER_SIZE - 1)
+	if(end_index >= (AC_BUFFER_SIZE - 1))
 		end_index = AC_BUFFER_SIZE - 1;
 
 	cnt[buffer[end_index]] -= factors[buffer[end_index]];
@@ -369,15 +371,17 @@ static inline void ac_q_limit(u8 ac, u16 *q_limit)
 	buffer[end_index] = ac;
 	if (end_index > 0)
 		end_index--;
-	else
+	else if(end_index >= (AC_BUFFER_SIZE - 1))
 		end_index = AC_BUFFER_SIZE - 1;
 
-	for (i = 0; i < NQUEUES; i++)
-		if (!sum)
+	for (i = 0; i < NQUEUES; i++){
+		if(!sum)
 			q_limit[i] = 1;
 		else
-			q_limit[i] = (cnt[i] * FLOW_CONTROL_UPPER_THRESHOLD /
-				      sum) + 1;
+			q_limit[i] = (cnt[i] * FLOW_CONTROL_UPPER_THRESHOLD / sum) + 1;
+	}
+	spin_unlock_irqrestore(&wilc->txq_spinlock, wilc->txq_spinlock_flags);
+	return;
 }
 
 static inline u8 ac_classify(struct wilc *wilc, struct txq_entry_t *tqe)
@@ -483,12 +487,19 @@ int wilc_wlan_txq_add_net_pkt(struct net_device *dev, void *priv, u8 *buffer,
 	u8 q_num;
 	u16 q_limit[NQUEUES] = {0, 0, 0, 0};
 
+	if(!vif){
+		pr_info("%s vif is NULL\n", __func__);
+		return -1;
+	}
+
+
+
 	wilc = vif->wilc;
 
 	if (wilc->quit)
 		return 0;
 
-	tqe = kmalloc(sizeof(*tqe), GFP_ATOMIC);
+	tqe = kmalloc(sizeof(*tqe), GFP_KERNEL);
 
 	if (!tqe)
 		return 0;
@@ -501,9 +512,10 @@ int wilc_wlan_txq_add_net_pkt(struct net_device *dev, void *priv, u8 *buffer,
 	q_num = ac_classify(wilc, tqe);
 	if (ac_change(wilc, &q_num)) {
 		netdev_dbg(dev, "No suitable non-ACM queue\n");
+		kfree(tqe);
 		return 0;
 	}
-	ac_q_limit(q_num, q_limit);
+	ac_q_limit(wilc, q_num, q_limit);
 
 	if ((q_num == AC_VO_Q && wilc->txq[q_num].count <= q_limit[AC_VO_Q]) ||
 	    (q_num == AC_VI_Q && wilc->txq[q_num].count <= q_limit[AC_VI_Q]) ||
@@ -798,6 +810,7 @@ void host_sleep_notify(struct wilc *wilc)
 }
 EXPORT_SYMBOL_GPL(host_sleep_notify);
 
+static u8 ac_fw_count[NQUEUES] = {0, 0, 0, 0};
 int wilc_wlan_handle_txq(struct net_device *dev, u32 *txq_count)
 {
 	int i, entries = 0;
@@ -817,11 +830,9 @@ int wilc_wlan_handle_txq(struct net_device *dev, u32 *txq_count)
 	int counter;
 	int timeout;
 	u32 vmm_table[WILC_VMM_TBL_SIZE];
-	static u8 ac_fw_count[NQUEUES] = {0, 0, 0, 0};
 	u8 ac_pkt_num_to_chip[NQUEUES] = {0, 0, 0, 0};
 	struct wilc_vif *vif;
 	struct wilc *wilc;
-
 	vif = netdev_priv(dev);
 	wilc = vif->wilc;
 
