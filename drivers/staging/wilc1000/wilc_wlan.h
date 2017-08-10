@@ -34,6 +34,8 @@
 
 #define ETH_CONFIG_PKT_HDR_OFFSET	(ETH_ETHERNET_HDR_OFFSET + \
 					 ETH_CONFIG_PKT_HDR_LEN)
+#define PKT_STATUS_NEW          0
+#define PKT_STATUS_BUFFERED     1
 
 /********************************************
  *
@@ -333,4 +335,5 @@ void chip_allow_sleep(struct wilc *wilc);
 void chip_wakeup(struct wilc *wilc);
 int wilc_send_config_pkt(struct wilc_vif *vif, u8 mode, struct wid *wids,
 			 u32 count, u32 drv);
+void eap_buff_timeout(unsigned long pUserVoid);
 #endif

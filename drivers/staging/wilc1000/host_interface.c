@@ -48,6 +48,7 @@
 #define HOST_IF_MSG_SET_TX_POWER		38
 #define HOST_IF_MSG_GET_TX_POWER		39
 #define HOST_IF_MSG_SET_ANTENNA_MODE		40
+#define HOST_IF_MSG_SEND_BUFFERED_EAP		41
 #define HOST_IF_MSG_EXIT                        100
 
 #define HOST_IF_SCAN_TIMEOUT                    4000
@@ -90,6 +91,22 @@ struct key_attr {
 	u8 action;
 	union host_if_key_attr attr;
 };
+
+struct send_buffered_eap {
+	wilc_frmw_to_linux frmw_to_linux;
+	free_eap_buf_param eap_buf_param;
+	u8 *buff;
+	unsigned int size;
+	unsigned int pkt_offset;
+	void *user_arg;
+};
+
+signed int wilc_send_buffered_eap(struct wilc_vif *vif,
+				  wilc_frmw_to_linux frmw_to_linux,
+				  free_eap_buf_param eap_buf_param,
+				  u8 *buff, unsigned int size,
+				  unsigned int pkt_offset,
+				  void *user_arg);
 
 struct scan_attr {
 	u8 src;
@@ -191,6 +208,7 @@ union message_body {
 	struct reg_frame reg_frame;
 	char *data;
 	struct del_all_sta del_all_sta_info;
+	struct send_buffered_eap send_buff_eap;
 	struct tx_power tx_power;
 	u8 antenna_mode;
 };
@@ -311,6 +329,28 @@ static struct wilc_vif *wilc_get_vif_from_idx(struct wilc *wilc, int idx)
 		return NULL;
 
 	return wilc->vif[index];
+}
+
+static int handle_send_buffered_eap(struct wilc_vif *vif,
+				    struct send_buffered_eap *hif_buff_eap)
+{
+	if (!hif_buff_eap->buff)
+		return -EINVAL;
+
+	if (hif_buff_eap->frmw_to_linux)
+		hif_buff_eap->frmw_to_linux(NULL, hif_buff_eap->buff,
+					    hif_buff_eap->size,
+					    hif_buff_eap->pkt_offset,
+					    PKT_STATUS_BUFFERED);
+	if (hif_buff_eap->eap_buf_param)
+		hif_buff_eap->eap_buf_param(hif_buff_eap->user_arg);
+
+	if(hif_buff_eap->buff != NULL){
+		kfree(hif_buff_eap->buff);
+		hif_buff_eap->buff = NULL;
+	}
+
+	return 0;
 }
 
 static void handle_set_channel(struct wilc_vif *vif,
@@ -1441,6 +1481,7 @@ static s32 Handle_RcvdGnrlAsyncInfo(struct wilc_vif *vif,
 				hif_drv->hif_state = HOST_IF_CONNECTED;
 
 				wilc_optaining_ip = true;
+				netdev_info(vif->ndev," his_state = HOST_IF_CONNECTED \n");
 				mod_timer(&wilc_during_ip_timer,
 					  jiffies + msecs_to_jiffies(10000));
 			} else {
@@ -2657,6 +2698,11 @@ static void host_if_work(struct work_struct *work)
 		handle_get_tx_pwr(msg->vif, &msg->body.tx_power.tx_pwr);
 		break;
 
+	case HOST_IF_MSG_SEND_BUFFERED_EAP:
+		handle_send_buffered_eap(msg->vif,
+					 &msg->body.send_buff_eap);
+		break;
+
 	case HOST_IF_MSG_SET_ANTENNA_MODE:
 		handle_set_antenna_mode(msg->vif, &msg->body.antenna_mode);
 		break;
@@ -2694,6 +2740,40 @@ static void TimerCB_Connect(unsigned long arg)
 	msg.id = HOST_IF_MSG_CONNECT_TIMER_FIRED;
 
 	wilc_enqueue_cmd(&msg);
+}
+
+signed int wilc_send_buffered_eap(struct wilc_vif *vif,
+				  wilc_frmw_to_linux frmw_to_linux,
+				  free_eap_buf_param eap_buf_param,
+				  u8 *buff, unsigned int size,
+				  unsigned int pkt_offset,
+				  void *user_arg)
+{
+	int result = 0;
+	struct host_if_msg msg;
+	struct wilc_priv *priv;
+	priv = (struct wilc_priv *)user_arg;
+
+	if(!priv->hif_drv){
+		return -EFAULT;
+	}
+	memset(&msg, 0, sizeof(struct host_if_msg));
+	msg.id = HOST_IF_MSG_SEND_BUFFERED_EAP;
+	msg.vif = vif;
+	msg.drv_handler = priv->hif_drv;
+	msg.body.send_buff_eap.frmw_to_linux = frmw_to_linux;
+	msg.body.send_buff_eap.eap_buf_param = eap_buf_param;
+	msg.body.send_buff_eap.size = size;
+	msg.body.send_buff_eap.pkt_offset = pkt_offset;
+	msg.body.send_buff_eap.buff = kmalloc(size + pkt_offset,
+						  GFP_ATOMIC);
+	memcpy(msg.body.send_buff_eap.buff, buff, size);
+	msg.body.send_buff_eap.user_arg = user_arg;
+
+	result = wilc_enqueue_cmd(&msg);
+	if (result)
+		netdev_err(vif->ndev, "Coud not send EAP\n");
+	return result;
 }
 
 s32 wilc_remove_key(struct host_if_drv *hif_drv, const u8 *pu8StaAddress)

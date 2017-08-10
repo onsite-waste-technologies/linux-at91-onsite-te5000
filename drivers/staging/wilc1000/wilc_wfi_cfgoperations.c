@@ -97,7 +97,7 @@ static u32 last_scanned_cnt;
 struct timer_list wilc_during_ip_timer;
 static struct timer_list hAgingTimer;
 static u8 op_ifcs;
-
+struct timer_list eap_buff_timer;
 u8 wilc_initialized = 1;
 
 #define CHAN2G(_channel, _freq, _flags) {	 \
@@ -2321,6 +2321,7 @@ int wilc_init_host_int(struct net_device *net)
 	if (op_ifcs == 0) {
 		setup_timer(&hAgingTimer, remove_network_from_shadow, 0);
 		setup_timer(&wilc_during_ip_timer, clear_duringIP, 0);
+		setup_timer(&eap_buff_timer, eap_buff_timeout, 0);
 	}
 	op_ifcs++;
 
@@ -2354,8 +2355,10 @@ int wilc_deinit_host_int(struct net_device *net)
 	s32Error = wilc_deinit(vif);
 
 	clear_shadow_scan();
-	if (op_ifcs == 0)
+	if (op_ifcs == 0){
 		del_timer_sync(&wilc_during_ip_timer);
+		del_timer_sync(&eap_buff_timer);
+	}
 
 	if (s32Error)
 		netdev_err(net, "Error while deinitializing host interface\n");

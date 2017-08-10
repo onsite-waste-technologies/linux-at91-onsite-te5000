@@ -39,6 +39,8 @@ static struct notifier_block g_dev_notifier = {
 static int wlan_deinit_locks(struct net_device *dev);
 static void wlan_deinitialize_threads(struct net_device *dev);
 
+void frmw_to_linux(struct wilc *wilc, u8 *buff, u32 size, u32 pkt_offset, u8
+		   status);
 static void linux_wlan_tx_complete(void *priv, int status);
 static int  mac_init_fn(struct net_device *ndev);
 static struct net_device_stats *mac_stats(struct net_device *dev);
@@ -250,6 +252,60 @@ void wilc_mac_indicate(struct wilc *wilc, int flag)
 		}
 	}
 }
+
+void free_eap_buff_params(void *vp)
+{
+	struct wilc_priv *priv;
+	priv = (struct wilc_priv *)vp;
+
+	if(priv->buffered_eap) {
+		if(priv->buffered_eap->buff) {
+			kfree(priv->buffered_eap->buff);
+			priv->buffered_eap->buff = NULL;
+		}
+		kfree(priv->buffered_eap);
+		priv->buffered_eap = NULL;
+	}
+}
+
+void eap_buff_timeout(unsigned long user)
+{
+        u8 null_bssid[ETH_ALEN] = {0};
+        static u8 timeout = 5;
+        int status = -1; 
+        struct wilc_priv *priv;
+        struct wilc_vif *vif ;
+        priv = (struct wilc_priv *)user;
+        vif = netdev_priv(priv->dev);
+        if (!(memcmp(priv->au8AssociatedBss, null_bssid, ETH_ALEN)) && (timeout-- > 0)) {
+                eap_buff_timer.data = (unsigned long)user;
+                mod_timer(&eap_buff_timer,(jiffies + msecs_to_jiffies(10)));
+                return;
+        }
+        del_timer(&eap_buff_timer);
+        timeout = 5;
+
+        status = wilc_send_buffered_eap(vif,
+                                        frmw_to_linux,
+                                        free_eap_buff_params,
+                                        priv->buffered_eap->buff,
+                                        priv->buffered_eap->size,
+                                        priv->buffered_eap->pkt_offset,
+                                        (void *)priv);
+
+        if (!priv->buffered_eap->buff)
+                return;
+
+        frmw_to_linux(vif->wilc, priv->buffered_eap->buff,
+                                            priv->buffered_eap->size,
+                                            priv->buffered_eap->pkt_offset,
+                                            PKT_STATUS_BUFFERED);
+
+	free_eap_buff_params(priv);
+
+}
+
+
 
 static struct net_device *get_if_handler(struct wilc *wilc, u8 *mac_header)
 {
@@ -1005,8 +1061,8 @@ int wilc_mac_xmit(struct sk_buff *skb, struct net_device *ndev)
 	tx_data->skb  = skb;
 
 	eth_h = (struct ethhdr *)(skb->data);
-	if (eth_h->h_proto == 0x8e88)
-		netdev_dbg(ndev, "EAPOL transmitted\n");
+	if (eth_h->h_proto == (0x8e88))
+		netdev_info(ndev," EAPOL transmitted\n");
 
 	ih = (struct iphdr *)(skb->data + sizeof(struct ethhdr));
 
@@ -1144,7 +1200,8 @@ done:
 	return ret;
 }
 
-void wilc_frmw_to_linux(struct wilc *wilc, u8 *buff, u32 size, u32 pkt_offset)
+void frmw_to_linux(struct wilc *wilc, u8 *buff, u32 size, u32 pkt_offset, u8
+		   status)
 {
 	unsigned int frame_len = 0;
 	int stats;
@@ -1152,24 +1209,61 @@ void wilc_frmw_to_linux(struct wilc *wilc, u8 *buff, u32 size, u32 pkt_offset)
 	struct sk_buff *skb;
 	struct net_device *wilc_netdev;
 	struct wilc_vif *vif;
+	struct wilc_priv *priv;
+	u8 null_bssid[ETH_ALEN] = {0};
+	static int i = 0;
 
 	if (!wilc)
 		return;
 
 	wilc_netdev = get_if_handler(wilc, buff);
-	if (!wilc_netdev)
+	if (!wilc_netdev){
 		return;
-
+	}
 	buff += pkt_offset;
 	vif = netdev_priv(wilc_netdev);
+	priv = wiphy_priv(vif->ndev->ieee80211_ptr->wiphy);
 
 	if (size > 0) {
 		frame_len = size;
 		buff_to_send = buff;
 
-		skb = dev_alloc_skb(frame_len);
-		if (!skb)
+		if((status == PKT_STATUS_NEW)
+			&&((buff_to_send[12] == 0x88 && buff_to_send[13] == 0x8e))
+			&&(vif->iftype == STATION_MODE || vif->iftype == CLIENT_MODE)
+			&&(!(memcmp(priv->au8AssociatedBss, null_bssid, ETH_ALEN)))) {
+
+			if(!priv->buffered_eap) {
+				priv->buffered_eap = kmalloc(sizeof(struct
+								    wilc_buffered_eap),
+							     GFP_ATOMIC);
+				if(priv->buffered_eap) {
+					priv->buffered_eap->buff = NULL;
+					priv->buffered_eap->size = 0;
+					priv->buffered_eap->pkt_offset = 0;
+				} else {
+					i = 0;
+					return;
+				}
+			} else {
+				kfree(priv->buffered_eap->buff );
+			}
+			priv->buffered_eap->buff = kmalloc(size + pkt_offset,
+							   GFP_ATOMIC);
+			priv->buffered_eap->size = size;
+			priv->buffered_eap->pkt_offset = pkt_offset;
+			memcpy(priv->buffered_eap->buff, buff -
+			       pkt_offset, size + pkt_offset);
+                       eap_buff_timer.data = (unsigned long) priv;
+                       mod_timer(&eap_buff_timer,(jiffies +
+                                                  msecs_to_jiffies(10))) ;
+			i = 0;
 			return;
+		}
+		skb = dev_alloc_skb(frame_len);
+		if (!skb){
+			return;
+		}
 
 		skb->dev = wilc_netdev;
 
@@ -1273,9 +1367,10 @@ int wilc_netdev_init(struct wilc **wilc, struct device *dev, int io_type,
                 }
 		vif->idx = wl->vif_num;
 		vif->wilc = *wilc;
+		vif->ndev = ndev;
 		wl->vif[i] = vif;
-		wl->vif[wl->vif_num]->ndev = ndev;
-		wl->vif_num++;
+		wl->vif_num = i;
+
 		ndev->netdev_ops = &wilc_netdev_ops;
 
 		{

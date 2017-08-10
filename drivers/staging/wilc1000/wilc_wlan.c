@@ -4,6 +4,9 @@
 #include "wilc_wfi_netdevice.h"
 #include "wilc_wlan_cfg.h"
 
+extern struct wilc *g_wilc;
+extern void frmw_to_linux(struct wilc *wilc, u8 *buff, u32 size, u32 pkt_offset, u8
+		   status);
 static CHIP_PS_STATE_T chip_ps_state = CHIP_WAKEDUP;
 
 static inline void acquire_bus(struct wilc *wilc, BUS_ACQUIRE_T acquire)
@@ -1005,10 +1008,11 @@ static void wilc_wlan_handle_rxq(struct wilc *wilc)
 			} else {
 				if (!is_cfg_packet) {
 					if (pkt_len > 0) {
-						wilc_frmw_to_linux(wilc,
-								   &buffer[offset],
-								   pkt_len,
-								   pkt_offset);
+						frmw_to_linux(wilc,
+							      &buffer[offset],
+							      pkt_len,
+							      pkt_offset,
+							      PKT_STATUS_NEW);
 					}
 				} else {
 					struct wilc_cfg_rsp rsp;

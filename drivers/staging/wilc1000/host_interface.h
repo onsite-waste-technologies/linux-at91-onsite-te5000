@@ -181,6 +181,10 @@ typedef void (*wilc_connect_result)(enum conn_event,
 typedef void (*wilc_remain_on_chan_expired)(void *, u32);
 typedef void (*wilc_remain_on_chan_ready)(void *);
 
+typedef void (*wilc_frmw_to_linux)(struct wilc *, u8 *, unsigned int,
+				   unsigned int, u8);
+typedef void (*free_eap_buf_param)(void *);
+
 struct rcvd_net_info {
 	u8 *buffer;
 	u32 len;
@@ -298,6 +302,12 @@ struct add_sta_param {
 };
 
 struct wilc_vif;
+signed int wilc_send_buffered_eap(struct wilc_vif *vif,
+				  wilc_frmw_to_linux frmw_to_linux,
+				  free_eap_buf_param eap_buf_param,
+				  u8 *buff, unsigned int size,
+				  unsigned int pkt_offset,
+				  void *user_arg);
 s32 wilc_remove_key(struct host_if_drv *hWFIDrv, const u8 *pu8StaAddress);
 int wilc_remove_wep_key(struct wilc_vif *vif, u8 index);
 int wilc_set_wep_default_keyid(struct wilc_vif *vif, u8 index);
@@ -368,6 +378,7 @@ extern u8 wilc_multicast_mac_addr_list[WILC_MULTICAST_TABLE_SIZE][ETH_ALEN];
 
 extern int wilc_connecting;
 extern u8 wilc_initialized;
+extern struct timer_list eap_buff_timer;
 extern struct timer_list wilc_during_ip_timer;
 
 #endif

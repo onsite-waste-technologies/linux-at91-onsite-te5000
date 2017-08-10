@@ -97,6 +97,13 @@ struct wilc_wfi_p2pListenParams {
 	u32 u32ListenSessionID;
 };
 
+/* Struct to buffer eapol 1/4 frame */
+struct wilc_buffered_eap {
+	unsigned int size;
+	unsigned int pkt_offset;
+	u8 *buff;
+};
+
 struct wilc_priv {
 	struct wireless_dev *wdev;
 	struct cfg80211_scan_request *pstrScanReq;
@@ -137,6 +144,7 @@ struct wilc_priv {
 	bool gbAutoRateAdjusted;
 
 	bool bInP2PlistenState;
+	struct wilc_buffered_eap *buffered_eap;
 
 };
 
@@ -225,7 +233,7 @@ struct WILC_WFI_mon_priv {
 
 int wilc1000_wlan_init(struct net_device *dev, struct wilc_vif *vif);
 
-void wilc_frmw_to_linux(struct wilc *wilc, u8 *buff, u32 size, u32 pkt_offset);
+//void wilc_frmw_to_linux(struct wilc *wilc, u8 *buff, u32 size, u32 pkt_offset);
 void wilc_mac_indicate(struct wilc *wilc, int flag);
 int wilc_lock_timeout(struct wilc *wilc, void *, u32 timeout);
 void wilc_netdev_cleanup(struct wilc *wilc);
