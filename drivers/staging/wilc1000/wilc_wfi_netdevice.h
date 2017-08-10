@@ -167,6 +167,8 @@ struct wilc_vif {
 	struct net_device *ndev;
 	u8 mode;
 	u8 ifc_id;
+	bool ifc_open;
+	bool p2p_mode;
 };
 
 struct wilc {
@@ -183,6 +185,7 @@ struct wilc {
 
 	struct mutex txq_add_to_head_cs;
 	spinlock_t txq_spinlock;
+	spinlock_t cfg_pkt_spinlock;
 
 	struct mutex rxq_cs;
 	struct mutex hif_cs;
@@ -191,9 +194,10 @@ struct wilc {
 	struct completion sync_event;
 	struct completion txq_event;
 	struct completion txq_thread_started;
-
+	struct completion debug_thread_started;
 	struct task_struct *txq_thread;
-
+	struct task_struct *debug_thread;
+	
 	int quit;
 	int cfg_frame_in_use;
 	struct wilc_cfg_frame cfg_frame;
