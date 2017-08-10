@@ -353,6 +353,9 @@ typedef enum {
 	 *  -----------------------------------------------------------
 	 */
 	WID_STATUS			= 0x0005,
+#ifdef WILC_BT_COEXISTENCE
+	WID_BT_COEX_MODE		= 0x0006,
+#endif
 
 	/*
 	 *  Scan type
@@ -447,6 +450,17 @@ typedef enum {
 	 *  -----------------------------------------------------------
 	 */
 	WID_ACK_POLICY			= 0x0011,
+
+#ifdef WILC_BT_COEXISTENCE
+	/*
+	 *  Set coex null frames transmission mode 
+	 * --------------------------------------------------------------
+ 	 *  Configuration :   Enable	Disable
+	 *  Values to set :       1			0
+	 * --------------------------------------------------------------
+	 */
+	WID_COEX_NULL_FRAMES_MODE               = 0x0013,
+#endif
 
 	/*
 	 *  Reset MAC (Set only)
