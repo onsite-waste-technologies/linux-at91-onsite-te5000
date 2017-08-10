@@ -24,6 +24,16 @@
 
 /********************************************
  *
+ *      Firmware Defines
+ *
+ ********************************************/
+#define	FIRMWARE_1002			"wilc1000_wifi_firmware.bin"
+#define	FIRMWARE_1003			"wilc1000_wifi_firmware.bin"
+#define	FIRMWARE_WILC3000_WIFI		"wilc3000_wifi_firmware.bin"
+#define	FIRMWARE_WILC3000_BT		"wilc3000_bt_firmware.bin"
+
+/********************************************
+ *
  *      Wlan Interface Defines
  *
  ********************************************/
@@ -898,6 +908,12 @@ typedef enum {
 	WID_ALL				= 0x7FFE,
 	WID_MAX				= 0xFFFF
 } WID_T;
+
+enum device_active {
+	NONE = 0,
+	WLAN_ACTTIVE = 1,
+	BT_ACTTIVE = 2,
+};
 
 struct wilc;
 int wilc_wlan_init(struct net_device *dev);

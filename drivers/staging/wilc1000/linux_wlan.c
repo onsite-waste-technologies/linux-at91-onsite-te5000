@@ -27,7 +27,7 @@
 #include <linux/mmc/sdio_func.h>
 #include <linux/pm_runtime.h>
 
-#define PREVENT_SDIO_HOST_FROM_SUSPEND
+//#define PREVENT_SDIO_HOST_FROM_SUSPEND
 
 static int dev_state_ev_handler(struct notifier_block *this,
 				unsigned long event, void *ptr);
@@ -410,10 +410,17 @@ int wilc_wlan_get_firmware(struct net_device *dev)
 
 	chip_id = wilc_get_chipid(wilc, false);
 
-	if (chip_id < 0x1003a0)
+	if (chip_id == 0x3000d0) {
+		netdev_info(dev, "Detect chip WILC3000\n");
+		firmware = FIRMWARE_WILC3000_WIFI;
+	}
+	else if (chip_id < 0x1003a0) {
 		firmware = FIRMWARE_1002;
-	else
+	}
+	else {
+		netdev_info(dev, "Detect chip WILC1000\n");
 		firmware = FIRMWARE_1003;
+	}
 
 	netdev_info(dev, "loading firmware %s\n", firmware);
 
@@ -457,7 +464,7 @@ static int linux_wlan_start_firmware(struct net_device *dev)
 	return 0;
 }
 
-static int wilc1000_firmware_download(struct net_device *dev)
+static int wilc_firmware_download(struct net_device *dev)
 {
 	struct wilc_vif *vif;
 	struct wilc *wilc;
@@ -691,7 +698,7 @@ _fail_:
 	return -1;
 }
 
-void wilc1000_wlan_deinit(struct net_device *dev)
+void wilc_wlan_deinitialize(struct net_device *dev)
 {
 	struct wilc_vif *vif;
 	struct wilc *wl;
@@ -705,7 +712,7 @@ void wilc1000_wlan_deinit(struct net_device *dev)
 	}
 
 	if (wl->initialized)	{
-		netdev_info(dev, "Deinitializing wilc1000...\n");
+		netdev_info(dev, "Deinitializing wilc...\n");
 
 		if (!wl->dev_irq_num &&
 		    wl->hif_func->disable_interrupt) {
@@ -725,9 +732,9 @@ void wilc1000_wlan_deinit(struct net_device *dev)
 
 		wl->initialized = false;
 
-		netdev_dbg(dev, "wilc1000 deinitialization Done\n");
+		netdev_info(dev, "wilc deinitialization Done\n");
 	} else {
-		netdev_dbg(dev, "wilc1000 is not initialized\n");
+		netdev_info(dev, "wilc is not initialized\n");
 	}
 }
 
@@ -810,7 +817,7 @@ static void wlan_deinitialize_threads(struct net_device *dev)
 	}
 }
 
-int wilc1000_wlan_init(struct net_device *dev, struct wilc_vif *vif)
+int wilc_wlan_initialize(struct net_device *dev, struct wilc_vif *vif)
 {
 	int ret = 0;
 	struct wilc *wl = vif->wilc;
@@ -850,7 +857,7 @@ int wilc1000_wlan_init(struct net_device *dev, struct wilc_vif *vif)
 			goto _fail_irq_enable_;
 		}
 
-		ret = wilc1000_firmware_download(dev);
+		ret = wilc_firmware_download(dev);
 		if (ret < 0) {
 			ret = -EIO;
 			goto _fail_irq_enable_;
@@ -901,7 +908,7 @@ _fail_locks_:
 		wlan_deinit_locks(dev);
 		netdev_err(dev, "WLAN Iinitialization FAILED\n");
 	} else {
-		netdev_dbg(dev, "wilc1000 already initialized\n");
+		netdev_dbg(dev, "wilc already initialized\n");
 	}
 	return ret;
 }
@@ -960,7 +967,7 @@ int wilc_mac_open(struct net_device *ndev)
 	if (!is_valid_ether_addr(ndev->dev_addr)) {
 		netdev_err(ndev, "Wrong MAC address\n");
 		wilc_deinit_host_int(ndev);
-		wilc1000_wlan_deinit(ndev);
+		wilc_wlan_deinitialize(ndev);
 		return -EINVAL;
 	}
 
@@ -972,7 +979,7 @@ int wilc_mac_open(struct net_device *ndev)
 				 vif->ndev->ieee80211_ptr,
 				 vif->frame_reg[1].type,
 				 vif->frame_reg[1].reg);
-	wilc_set_antenna(vif, DIVERSITY);
+//	wilc_set_antenna(vif, DIVERSITY);
 	netif_wake_queue(ndev);
 	wl->open_ifcs++;
 	vif->mac_opened = 1;
@@ -1087,7 +1094,7 @@ int wilc_mac_xmit(struct sk_buff *skb, struct net_device *ndev)
 	return 0;
 }
 
-int wilc_mac_close(struct net_device *ndev)
+static int wilc_mac_close(struct net_device *ndev)
 {
 	struct wilc_priv *priv;
 	struct wilc_vif *vif;
@@ -1128,9 +1135,9 @@ int wilc_mac_close(struct net_device *ndev)
 	}
 
 	if (wl->open_ifcs == 0) {
-		netdev_dbg(ndev, "Deinitializing wilc1000\n");
+		netdev_dbg(ndev, "Deinitializing wilc\n");
 		wl->close = 1;
-		wilc1000_wlan_deinit(ndev);
+		wilc_wlan_deinitialize(ndev);
 		WILC_WFI_deinit_mon_interface();
 	}
 
@@ -1406,5 +1413,37 @@ int wilc_netdev_init(struct wilc **wilc, struct device *dev, int io_type,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(wilc_netdev_init);
+
+static void wilc_wlan_power(int power)
+{
+	if (gpio_request(GPIO_NUM_CHIP_EN, "CHIP_EN") == 0 &&
+	    gpio_request(GPIO_NUM_RESET, "RESET") == 0) {
+		gpio_direction_output(GPIO_NUM_CHIP_EN, 0);
+		gpio_direction_output(GPIO_NUM_RESET, 0);
+		if (power) {
+			gpio_set_value(GPIO_NUM_CHIP_EN, 1);
+			mdelay(5);
+			gpio_set_value(GPIO_NUM_RESET, 1);
+		} else {
+			gpio_set_value(GPIO_NUM_RESET, 0);
+			gpio_set_value(GPIO_NUM_CHIP_EN, 0);
+		}
+		gpio_free(GPIO_NUM_CHIP_EN);
+		gpio_free(GPIO_NUM_RESET);
+	}
+}
+
+void wilc_wlan_power_on_sequence(void)
+{
+	wilc_wlan_power(0);
+	wilc_wlan_power(1);
+}
+EXPORT_SYMBOL_GPL(wilc_wlan_power_on_sequence);
+
+void wilc_wlan_power_off_sequence(void)
+{
+	wilc_wlan_power(0);
+}
+EXPORT_SYMBOL_GPL(wilc_wlan_power_off_sequence);
 
 MODULE_LICENSE("GPL");

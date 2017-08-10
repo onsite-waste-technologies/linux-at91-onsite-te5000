@@ -3,7 +3,8 @@
 
 #include <linux/types.h>
 
-#define ISWILC1000(id)			((id & 0xfffff000) == 0x100000 ? 1 : 0)
+#define ISWILC1000(id)			(((id) & 0xfffff000) == 0x100000 ? 1 : 0)
+#define ISWILC3000(id)			(((id) & 0xfffff000) == 0x300000 ? 1 : 0)
 
 /********************************************
  *
@@ -54,6 +55,7 @@
 #define WILC_HOST_RX_CTRL		(WILC_PERIPH_REG_BASE + 0x80)
 #define WILC_HOST_RX_EXTRA_SIZE		(WILC_PERIPH_REG_BASE + 0x84)
 #define WILC_HOST_TX_CTRL_1		(WILC_PERIPH_REG_BASE + 0x88)
+#define WILC_INTERRUPT_CORTUS_0		(WILC_PERIPH_REG_BASE + 0xa8)
 #define WILC_MISC			(WILC_PERIPH_REG_BASE + 0x428)
 #define WILC_INTR_REG_BASE		(WILC_PERIPH_REG_BASE + 0xa00)
 #define WILC_INTR_ENABLE		WILC_INTR_REG_BASE
@@ -252,6 +254,11 @@ struct rxq_entry_t {
 	int buffer_size;
 };
 
+enum wilc_chip_id {
+	WILC_1000,
+	WILC_3000,
+};
+
 /********************************************
  *
  *      Host IF Structure
@@ -274,9 +281,6 @@ struct wilc_hif_func {
 	int (*enable_interrupt)(struct wilc *nic);
 	void (*disable_interrupt)(struct wilc *nic);
 };
-
-extern const struct wilc_hif_func wilc_hif_spi;
-extern const struct wilc_hif_func wilc_hif_sdio;
 
 /********************************************
  *
@@ -335,5 +339,10 @@ void chip_allow_sleep(struct wilc *wilc);
 void chip_wakeup(struct wilc *wilc);
 int wilc_send_config_pkt(struct wilc_vif *vif, u8 mode, struct wid *wids,
 			 u32 count, u32 drv);
+void wilc_wlan_power_on_sequence(void);
+void wilc_wlan_power_off_sequence(void);
+
+void wilc_bt_init(struct wilc *wilc);
+void wilc_bt_deinit(void);
 void eap_buff_timeout(unsigned long pUserVoid);
 #endif

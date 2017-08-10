@@ -1819,6 +1819,9 @@ static int set_power_mgmt(struct wiphy *wiphy, struct net_device *dev,
 	if (!wiphy)
 		return -ENOENT;
 
+	if (wilc_optaining_ip)
+		return -EINVAL;
+
 	priv = wiphy_priv(wiphy);
 	vif = netdev_priv(priv->dev);
 	if (!priv->hif_drv)
