@@ -2179,9 +2179,23 @@ static u32 WILC_HostIf_PackStaParam(u8 *pu8Buffer,
 	pu8CurrByte += pstrStationParam->rates_len;
 
 	*pu8CurrByte++ = pstrStationParam->ht_supported;
-	memcpy(pu8CurrByte, &pstrStationParam->ht_capa,
-	       sizeof(struct ieee80211_ht_cap));
-	pu8CurrByte += sizeof(struct ieee80211_ht_cap);
+	*pu8CurrByte++ = pstrStationParam->ht_capa_info & 0xFF;
+	*pu8CurrByte++ = (pstrStationParam->ht_capa_info >> 8) & 0xFF;
+
+	*pu8CurrByte++ = pstrStationParam->ht_ampdu_params;
+	memcpy(pu8CurrByte, pstrStationParam->ht_supp_mcs_set,
+	       WILC_SUPP_MCS_SET_SIZE);
+	pu8CurrByte += WILC_SUPP_MCS_SET_SIZE;
+
+	*pu8CurrByte++ = pstrStationParam->ht_ext_params & 0xFF;
+	*pu8CurrByte++ = (pstrStationParam->ht_ext_params >> 8) & 0xFF;
+
+	*pu8CurrByte++ = pstrStationParam->ht_tx_bf_cap & 0xFF;
+	*pu8CurrByte++ = (pstrStationParam->ht_tx_bf_cap >> 8) & 0xFF;
+	*pu8CurrByte++ = (pstrStationParam->ht_tx_bf_cap >> 16) & 0xFF;
+	*pu8CurrByte++ = (pstrStationParam->ht_tx_bf_cap >> 24) & 0xFF;
+
+	*pu8CurrByte++ = pstrStationParam->ht_ante_sel;
 
 	*pu8CurrByte++ = pstrStationParam->flags_mask & 0xFF;
 	*pu8CurrByte++ = (pstrStationParam->flags_mask >> 8) & 0xFF;
