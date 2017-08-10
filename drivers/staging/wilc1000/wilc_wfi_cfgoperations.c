@@ -1145,8 +1145,11 @@ static int get_key(struct wiphy *wiphy, struct net_device *netdev, u8 key_index,
 {
 	struct wilc_priv *priv;
 	struct  key_params key_params;
+	struct wilc_vif *vif;
 
 	priv = wiphy_priv(wiphy);
+	vif = netdev_priv(netdev);
+
 
 	if (!pairwise) {
 		key_params.key = priv->wilc_gtk[key_index]->key;
@@ -1323,6 +1326,9 @@ static int del_pmksa(struct wiphy *wiphy, struct net_device *netdev,
 	s32 s32Error = 0;
 
 	struct wilc_priv *priv = wiphy_priv(wiphy);
+	struct wilc_vif *vif;
+
+	vif = netdev_priv(priv->dev);
 
 	for (i = 0; i < priv->pmkid_list.numpmkid; i++)	{
 		if (!memcmp(pmksa->bssid, priv->pmkid_list.pmkidlist[i].bssid,
@@ -1358,7 +1364,7 @@ static int flush_pmksa(struct wiphy *wiphy, struct net_device *netdev)
 	return 0;
 }
 
-static void WILC_WFI_CfgParseRxAction(u8 *buf, u32 len)
+static void WILC_WFI_CfgParseRxAction(u8 *buf, u32 len, bool p2p_mode)
 {
 	u32 index = 0;
 	u32 i = 0, j = 0;
@@ -1367,8 +1373,12 @@ static void WILC_WFI_CfgParseRxAction(u8 *buf, u32 len)
 	u8 channel_list_attr_index = 0;
 
 	while (index < len) {
-		if (buf[index] == GO_INTENT_ATTR_ID)
-			buf[index + 3] = (buf[index + 3]  & 0x01) | (0x00 << 1);
+		if (buf[index] == GO_INTENT_ATTR_ID) {
+			if(!p2p_mode)
+				buf[index + 3] = (buf[index + 3]  & 0x01) | (0x0f << 1);
+			else
+				buf[index + 3] = (buf[index + 3]  & 0x01) | (0x00 << 1);
+		}
 
 		if (buf[index] ==  CHANLIST_ATTR_ID)
 			channel_list_attr_index = index;
@@ -1394,7 +1404,7 @@ static void WILC_WFI_CfgParseRxAction(u8 *buf, u32 len)
 	}
 }
 
-static void WILC_WFI_CfgParseTxAction(u8 *buf, u32 len, bool bOperChan, u8 iftype)
+static void WILC_WFI_CfgParseTxAction(u8 *buf, u32 len, bool bOperChan, bool p2p_mode)
 {
 	u32 index = 0;
 	u32 i = 0, j = 0;
@@ -1404,7 +1414,12 @@ static void WILC_WFI_CfgParseTxAction(u8 *buf, u32 len, bool bOperChan, u8 iftyp
 
 	while (index < len) {
 		if (buf[index] == GO_INTENT_ATTR_ID) {
+if(!p2p_mode) {
+			buf[index + 3] = (buf[index + 3]  & 0x01) | (0x00 << 1);
+}
+else {
 			buf[index + 3] = (buf[index + 3]  & 0x01) | (0x0f << 1);
+}
 
 			break;
 		}
@@ -1436,10 +1451,12 @@ static void WILC_WFI_CfgParseTxAction(u8 *buf, u32 len, bool bOperChan, u8 iftyp
 void WILC_WFI_p2p_rx(struct net_device *dev, u8 *buff, u32 size)
 {
 	struct wilc_priv *priv;
+	struct wilc_vif *vif;
 	u32 header, pkt_offset;
 	struct host_if_drv *pstrWFIDrv;
 	u32 i = 0;
 	s32 s32Freq;
+	vif = netdev_priv(dev);
 
 	priv = wiphy_priv(dev->ieee80211_ptr->wiphy);
 	pstrWFIDrv = (struct host_if_drv *)priv->hif_drv;
@@ -1493,7 +1510,7 @@ void WILC_WFI_p2p_rx(struct net_device *dev, u8 *buff, u32 size)
 							     buff[P2P_PUB_ACTION_SUBTYPE] == P2P_INV_REQ || buff[P2P_PUB_ACTION_SUBTYPE] == P2P_INV_RSP)) {
 								for (i = P2P_PUB_ACTION_SUBTYPE + 2; i < size; i++) {
 									if (buff[i] == P2PELEM_ATTR_ID && !(memcmp(p2p_oui, &buff[i + 2], 4))) {
-										WILC_WFI_CfgParseRxAction(&buff[i + 6], size - (i + 6));
+										WILC_WFI_CfgParseRxAction(&buff[i + 6], size - (i + 6), vif->p2p_mode);
 										break;
 									}
 								}
@@ -1682,7 +1699,7 @@ static int mgmt_tx(struct wiphy *wiphy,
 										if (buf[P2P_PUB_ACTION_SUBTYPE] == P2P_INV_REQ || buf[P2P_PUB_ACTION_SUBTYPE] == P2P_INV_RSP)
 											WILC_WFI_CfgParseTxAction(&mgmt_tx->buff[i + 6], len - (i + 6), true, vif->iftype);
 										else
-											WILC_WFI_CfgParseTxAction(&mgmt_tx->buff[i + 6], len - (i + 6), false, vif->iftype);
+											WILC_WFI_CfgParseTxAction(&mgmt_tx->buff[i + 6], len - (i + 6), false, vif->p2p_mode);
 										break;
 									}
 								}
@@ -1831,7 +1848,7 @@ static int set_power_mgmt(struct wiphy *wiphy, struct net_device *dev,
 }
 
 static int change_virtual_intf(struct wiphy *wiphy, struct net_device *dev,
-			       enum nl80211_iftype type, struct vif_params *params)
+			       enum nl80211_iftype type, u32 *flags, struct vif_params *params)
 {
 	struct wilc_priv *priv;
 	struct wilc_vif *vif;
@@ -1932,7 +1949,12 @@ static int start_ap(struct wiphy *wiphy, struct net_device *dev,
 	if (s32Error != 0)
 		netdev_err(dev, "Error in setting channel\n");
 
-	wilc_wlan_set_bssid(dev, wl->vif[vif->idx]->src_addr, AP_MODE);
+	
+	if(wl->vif[1]->ndev == dev)
+		wilc_wlan_set_bssid(dev, wl->vif[1]->src_addr, AP_MODE);
+	else
+		wilc_wlan_set_bssid(dev, wl->vif[0]->src_addr, AP_MODE);
+
 	wilc_set_power_mgmt(vif, 0, 0);
 
 	s32Error = wilc_add_beacon(vif, settings->beacon_interval,
@@ -2104,6 +2126,7 @@ static struct wireless_dev *add_virtual_intf(struct wiphy *wiphy,
 					     const char *name,
 					     unsigned char name_assign_type,
 					     enum nl80211_iftype type,
+					     u32 *flags,
 					     struct vif_params *params)
 {
 	struct wilc_vif *vif;

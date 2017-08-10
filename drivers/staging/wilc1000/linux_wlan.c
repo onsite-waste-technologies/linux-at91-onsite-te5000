@@ -1217,7 +1217,12 @@ int wilc_mac_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 	vif->netstats.tx_packets++;
 	vif->netstats.tx_bytes += tx_data->size;
-	tx_data->bssid = wilc->vif[vif->idx]->bssid;
+
+	if(wilc->vif[1]->ndev == ndev)
+		tx_data->bssid = wilc->vif[1]->bssid;
+	else
+		tx_data->bssid = wilc->vif[0]->bssid;
+
 	queue_count = wilc_wlan_txq_add_net_pkt(ndev, (void *)tx_data,
 						tx_data->buff, tx_data->size,
 						linux_wlan_tx_complete);
@@ -1467,6 +1472,7 @@ void wilc_netdev_cleanup(struct wilc *wilc)
 	}
 
 	kfree(wilc);
+	p2p_sysfs_exit();
 }
 EXPORT_SYMBOL_GPL(wilc_netdev_cleanup);
 
@@ -1541,6 +1547,7 @@ int wilc_netdev_init(struct wilc **wilc, struct device *dev, int io_type,
 		vif->iftype = STATION_MODE;
 		vif->mac_opened = 0;
 	}
+	p2p_sysfs_init(vif);
 
 	return 0;
 }
