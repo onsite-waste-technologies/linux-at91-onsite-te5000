@@ -350,12 +350,12 @@ static void wilc_wlan_parse_response_frame(u8 *info, int size)
 						toggle ^= 1;
 					}
 					memcpy(g_cfg_str[i].str, &info[2],
-					       (info[2] + 2));
+					       (2+((info[3] << 8) | info[2])));
 					break;
 				}
 				i++;
 			} while (1);
-			len = 2 + info[2];
+			len = 2+((info[3] << 8) | info[2]);
 			break;
 		case WID_BIN_DATA:
 				do {
