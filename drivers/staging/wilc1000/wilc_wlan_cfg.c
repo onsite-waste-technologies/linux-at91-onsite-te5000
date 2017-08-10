@@ -45,6 +45,7 @@ struct wilc_mac_cfg {
 	u8 firmware_info[8];
 	u8 scan_result[256];
 	u8 scan_result1[256];
+	u8 antenna_param[5];
 };
 
 static struct wilc_mac_cfg g_mac;
@@ -157,6 +158,10 @@ static struct wilc_cfg_str g_cfg_str[] = {
 	{WID_FIRMWARE_INFO, g_mac.firmware_version},
 	{WID_IP_ADDRESS, g_mac.ip_address},
 	{WID_NIL, NULL}
+};
+
+static struct wilc_cfg_bin g_cfg_bin[] = {
+	{WID_ANTENNA_SELECTION, g_mac.antenna_param}
 };
 
 /********************************************
@@ -352,7 +357,37 @@ static void wilc_wlan_parse_response_frame(u8 *info, int size)
 			} while (1);
 			len = 2 + info[2];
 			break;
+		case WID_BIN_DATA:
+				do {
+					if (g_cfg_bin[i].id == WID_NIL)
+						break;
 
+					if (g_cfg_bin[i].id == wid)
+					{
+						uint16_t length      = ((info[3] << 8) | info[2]);
+						uint8_t  checksum    = 0;
+						uint16_t i           = 0;
+
+						/* Compute the Checksum of received data field */
+						for(i = 0;i < length;i++)
+						{
+							checksum += info[4 + i];
+						}
+						/*  Verify the checksum of recieved BIN DATA */
+						if (checksum == info[4 + length])
+						{
+							memcpy(g_cfg_bin[i].bin, &info[2], length + 2);
+							len = 2 + length + 1;   /* value length + data length + checksum */
+							break;
+						}
+						else
+						{
+								return;
+						}
+					}
+					i++;
+				} while (1);
+				break;
 		default:
 			break;
 		}
@@ -507,6 +542,23 @@ int wilc_wlan_cfg_get_wid_value(u16 wid, u8 *buffer, u32 buffer_size)
 			}
 			i++;
 		} while (1);
+	} else if (type == CFG_BIN_CMD) {			/* binary command */
+		do {
+			if (g_cfg_bin[i].id == WID_NIL)
+				break;
+
+			if (g_cfg_bin[i].id == wid) {
+				uint32_t size =  (g_cfg_bin[i].bin[0])|(g_cfg_bin[i].bin[1]<<8);
+				if (buffer_size >= size) {					
+					memcpy(buffer,  &g_cfg_bin[i].bin[2], size);
+					ret = size;
+				}
+				break;
+			}
+			i++;
+		} while (1);
+	} else {
+		pr_info("[CFG]: illegal type (%08x)\n", wid);
 	}
 
 	return ret;

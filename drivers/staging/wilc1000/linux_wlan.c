@@ -454,12 +454,21 @@ int wilc_wlan_get_num_conn_ifcs(struct wilc *wilc)
 	return ret_val;
 }
 
+#define TX_BACKOFF_WEIGHT_INCR_STEP (1)
+#define TX_BACKOFF_WEIGHT_DECR_STEP (1)
+#define TX_BACKOFF_WEIGHT_MAX (0)
+#define TX_BACKOFF_WEIGHT_MIN (0)
+#define TX_BACKOFF_WEIGHT_UNIT_MS (1)
+
+
 static int linux_wlan_txq_task(void *vp)
 {
 	int ret, txq_count;
 	struct wilc_vif *vif;
 	struct wilc *wl;
 	struct net_device *dev = vp;
+        int backoff_weight = TX_BACKOFF_WEIGHT_MIN;
+        signed long timeout;
 
 	vif = netdev_priv(dev);
 	wl = vif->wilc;
@@ -483,6 +492,27 @@ static int linux_wlan_txq_task(void *vp)
 				if (netif_queue_stopped(wl->vif[1]->ndev))
 					netif_wake_queue(wl->vif[1]->ndev);
 			}
+
+                        if (ret == WILC_TX_ERR_NO_BUF) {
+                                timeout = msecs_to_jiffies(TX_BACKOFF_WEIGHT_UNIT_MS << backoff_weight);
+                                do {
+                                        /* Back off from sending packets for some time. */
+                                        /* schedule_timeout will allow RX task to run and free buffers.*/                                       
+                                        /*Setting state to TASK_INTERRUPTIBLE will put the thread back to CPU*/
+                                        /*running queue when it's signaled even if 'timeout' isn't elapsed.*/
+                                        /*This gives faster chance for reserved SK buffers to be freed*/
+                                        set_current_state(TASK_INTERRUPTIBLE);
+                                        timeout = schedule_timeout(timeout);
+                                } while(/*timeout*/0);
+                                backoff_weight += TX_BACKOFF_WEIGHT_INCR_STEP;
+                                if (backoff_weight > TX_BACKOFF_WEIGHT_MAX)
+                                        backoff_weight = TX_BACKOFF_WEIGHT_MAX;
+                        } else  if (backoff_weight > TX_BACKOFF_WEIGHT_MIN) {
+                                backoff_weight -= TX_BACKOFF_WEIGHT_DECR_STEP;
+                                if (backoff_weight < TX_BACKOFF_WEIGHT_MIN)
+                                        backoff_weight = TX_BACKOFF_WEIGHT_MIN;
+                        }
+
 		} while (ret == WILC_TX_ERR_NO_BUF && !wl->close);
 	}
 	return 0;
@@ -970,13 +1000,13 @@ int wilc_wlan_initialize(struct net_device *dev, struct wilc_vif *vif)
 
 		if (wilc_wlan_cfg_get(vif, 1, WID_FIRMWARE_VERSION, 1, 0)) {
 			int size;
-			char firmware_ver[20];
+			char firmware_ver[50];
 
 			size = wilc_wlan_cfg_get_val(WID_FIRMWARE_VERSION,
 						     firmware_ver,
 						     sizeof(firmware_ver));
 			firmware_ver[size] = '\0';
-			netdev_dbg(dev, "Firmware Ver = %s\n", firmware_ver);
+			netdev_info(dev, "WILC Firmware Ver = %s\n", firmware_ver);
 		}
 		ret = linux_wlan_init_test_config(dev, vif);
 
