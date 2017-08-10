@@ -1664,12 +1664,18 @@ int wilc_wlan_cfg_get_val(u16 wid, u8 *buffer, u32 buffer_size)
 {
 	return wilc_wlan_cfg_get_wid_value(wid, buffer, buffer_size);
 }
-
+unsigned int cfg_packet_timeout = 0;
+extern int wait_for_recovery;
 int wilc_send_config_pkt(struct wilc_vif *vif, u8 mode, struct wid *wids,
 			 u32 count, u32 drv)
 {
 	int i;
 	int ret = 0;
+
+	if(wait_for_recovery){
+	while(wait_for_recovery)
+		msleep(300);
+	}
 
 	if (mode == GET_CFG) {
 		for (i = 0; i < count; i++) {
@@ -1699,7 +1705,7 @@ int wilc_send_config_pkt(struct wilc_vif *vif, u8 mode, struct wid *wids,
 			}
 		}
 	}
-
+	cfg_packet_timeout = (ret < 0) ? cfg_packet_timeout + 1 : 0;
 	return ret;
 }
 

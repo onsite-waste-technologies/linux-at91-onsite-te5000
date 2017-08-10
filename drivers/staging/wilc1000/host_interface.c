@@ -460,7 +460,7 @@ static void handle_set_operation_mode(struct wilc_vif *vif,
 	if (ret)
 		netdev_err(vif->ndev, "Failed to set driver handler\n");
 }
-
+extern int recovery_on;
 static void handle_set_ip_address(struct wilc_vif *vif, u8 *ip_addr, u8 idx)
 {
 	int ret = 0;
@@ -480,8 +480,11 @@ static void handle_set_ip_address(struct wilc_vif *vif, u8 *ip_addr, u8 idx)
 				   wilc_get_vif_idx(vif));
 
 
-	if (ret)
+	if (ret) {
 		netdev_err(vif->ndev, "Failed to set IP address\n");
+		recovery_on = 1;
+
+	}
 }
 
 static void handle_get_ip_address(struct wilc_vif *vif, u8 idx)
