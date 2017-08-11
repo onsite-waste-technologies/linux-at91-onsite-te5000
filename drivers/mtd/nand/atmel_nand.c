@@ -107,6 +107,14 @@ static const struct mtd_ooblayout_ops atmel_ooblayout_sp_ops = {
 	.free = atmel_ooblayout_free_sp,
 };
 
+struct atmel_smc_suspend_ctx {
+	u32 setup;
+	u32 pulse;
+	u32 cycle;
+	u32 timings;
+	u32 mode;
+};
+
 struct atmel_nfc {
 	void __iomem		*base_cmd_regs;
 	void __iomem		*hsmc_regs;
@@ -169,6 +177,9 @@ struct atmel_nand_host {
 	int			*pmecc_mu;
 	int			*pmecc_dmu;
 	int			*pmecc_delta;
+
+	void __iomem		*smc_timing_regs;
+	struct atmel_smc_suspend_ctx suspend;
 };
 
 /*
@@ -1234,6 +1245,12 @@ static int atmel_pmecc_nand_init_params(struct platform_device *pdev,
 			dev_err(host->dev, "Can not get I/O resource for ROM, will build a lookup table in runtime!\n");
 			host->has_no_lookup_table = true;
 		}
+
+		regs = platform_get_resource(pdev, IORESOURCE_MEM, 4);
+		host->smc_timing_regs = devm_ioremap_resource(&pdev->dev,
+							      regs);
+		if (IS_ERR(host->smc_timing_regs))
+			host->smc_timing_regs = NULL;
 	}
 
 	if (host->has_no_lookup_table) {
@@ -2117,6 +2134,67 @@ static int nfc_sram_init(struct mtd_info *mtd)
 	return 0;
 }
 
+static void atmel_smc_suspend(struct atmel_nand_host *host)
+{
+	if (!host->smc_timing_regs)
+		return;
+
+	host->suspend.setup = readl(host->smc_timing_regs);
+	host->suspend.pulse = readl(host->smc_timing_regs + 0x4);
+	host->suspend.cycle = readl(host->smc_timing_regs + 0x8);
+	host->suspend.timings = readl(host->smc_timing_regs + 0xc);
+	host->suspend.mode = readl(host->smc_timing_regs + 0x10);
+}
+
+static void atmel_smc_resume(struct atmel_nand_host *host)
+{
+	if (!host->smc_timing_regs)
+		return;
+
+	writel(host->suspend.setup, host->smc_timing_regs);
+	writel(host->suspend.pulse, host->smc_timing_regs + 0x4);
+	writel(host->suspend.cycle, host->smc_timing_regs + 0x8);
+	writel(host->suspend.timings, host->smc_timing_regs + 0xc);
+	writel(host->suspend.mode, host->smc_timing_regs + 0x10);
+}
+
+static int atmel_nand_suspend(struct device *dev)
+{
+	struct atmel_nand_host *host = dev_get_drvdata(dev);
+
+	atmel_smc_suspend(host);
+
+	return 0;
+}
+
+static int atmel_nand_resume(struct device *dev)
+{
+	struct atmel_nand_host *host = dev_get_drvdata(dev);
+	struct nand_chip *nand_chip = &host->nand_chip;
+	struct mtd_info *mtd = nand_to_mtd(nand_chip);
+	int ret;
+
+	atmel_smc_resume(host);
+
+	/* Restore the PMECC config. */
+	if (nand_chip->ecc.mode == NAND_ECC_HW && host->has_pmecc)
+		atmel_pmecc_core_init(mtd);
+
+	/* Restore the nfc configuration register. */
+	if (host->nfc && host->nfc->use_nfc_sram) {
+		ret = nfc_sram_init(mtd);
+		if (ret) {
+			host->nfc->use_nfc_sram = false;
+			dev_err(host->dev, "Disable use nfc sram for data transfer.\n");
+		}
+	}
+
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(atmel_nand_pm_ops, atmel_nand_suspend,
+			 atmel_nand_resume);
+
 static struct platform_driver atmel_nand_nfc_driver;
 /*
  * Probe for the NAND device.
@@ -2387,6 +2465,30 @@ static const struct of_device_id atmel_nand_dt_ids[] = {
 
 MODULE_DEVICE_TABLE(of, atmel_nand_dt_ids);
 
+static int atmel_nand_nfc_suspend(struct device *dev)
+{
+	struct atmel_nfc *nfc = &nand_nfc;
+
+	clk_disable_unprepare(nfc->clk);
+
+	return 0;
+}
+
+static int atmel_nand_nfc_resume(struct device *dev)
+{
+	struct atmel_nfc *nfc = &nand_nfc;
+	int ret;
+
+	ret = clk_prepare_enable(nfc->clk);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(atmel_nand_nfc_pm_ops, atmel_nand_nfc_suspend,
+			 atmel_nand_nfc_resume);
+
 static int atmel_nand_nfc_probe(struct platform_device *pdev)
 {
 	struct atmel_nfc *nfc = &nand_nfc;
@@ -2430,6 +2532,7 @@ static int atmel_nand_nfc_probe(struct platform_device *pdev)
 		if (ret)
 			return ret;
 	} else {
+		nfc->clk = NULL;
 		dev_warn(&pdev->dev, "NFC clock missing, update your Device Tree");
 	}
 
@@ -2443,8 +2546,7 @@ static int atmel_nand_nfc_remove(struct platform_device *pdev)
 {
 	struct atmel_nfc *nfc = &nand_nfc;
 
-	if (!IS_ERR(nfc->clk))
-		clk_disable_unprepare(nfc->clk);
+	clk_disable_unprepare(nfc->clk);
 
 	return 0;
 }
@@ -2459,6 +2561,7 @@ static struct platform_driver atmel_nand_nfc_driver = {
 	.driver = {
 		.name = "atmel_nand_nfc",
 		.of_match_table = of_match_ptr(atmel_nand_nfc_match),
+		.pm = &atmel_nand_nfc_pm_ops,
 	},
 	.probe = atmel_nand_nfc_probe,
 	.remove = atmel_nand_nfc_remove,
@@ -2470,6 +2573,7 @@ static struct platform_driver atmel_nand_driver = {
 	.driver		= {
 		.name	= "atmel_nand",
 		.of_match_table	= of_match_ptr(atmel_nand_dt_ids),
+		.pm = &atmel_nand_pm_ops,
 	},
 };
 

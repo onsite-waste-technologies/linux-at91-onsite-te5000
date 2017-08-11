@@ -776,6 +776,11 @@
 						atmel,clk-output-range = <0 83000000>;
 					};
 
+					securam_clk: securam_clk {
+						#clock-cells = <0>;
+						reg = <51>;
+					};
+
 					i2s0_clk: i2s0_clk {
 						#clock-cells = <0>;
 						reg = <54>;
@@ -1009,12 +1014,6 @@
 				compatible = "atmel,at91rm9200-spi";
 				reg = <0xf8000000 0x100>;
 				interrupts = <33 IRQ_TYPE_LEVEL_HIGH 7>;
-				dmas = <&dma0
-					(AT91_XDMAC_DT_MEM_IF(0) | AT91_XDMAC_DT_PER_IF(1) |
-					 AT91_XDMAC_DT_PERID(6))>,
-				       <&dma0
-					(AT91_XDMAC_DT_MEM_IF(0) | AT91_XDMAC_DT_PER_IF(1) |
-					 AT91_XDMAC_DT_PERID(7))>;
 				dma-names = "tx", "rx";
 				clocks = <&spi0_clk>;
 				clock-names = "spi_clk";
@@ -1163,6 +1162,15 @@
 				#size-cells = <1>;
 				ranges = <0x0 0xf8038000 0x800>;
 				status = "disabled";
+			};
+
+			securam: sram@f8044000 {
+				compatible = "atmel,sama5d2-securam", "mmio-sram";
+				reg = <0xf8044000 0x1420>;
+				clocks = <&securam_clk>;
+				#address-cells = <1>;
+				#size-cells = <1>;
+				ranges = <0 0xf8044000 0x1420>;
 			};
 
 			rstc@f8048000 {
@@ -1401,6 +1409,11 @@
 				clocks = <&pioA_clk>;
 			};
 
+			secumod@fc040000 {
+				compatible = "atmel,sama5d2-secumod", "syscon";
+				reg = <0xfc040000 0x100>;
+			};
+
 			tdes@fc044000 {
 				compatible = "atmel,at91sam9g46-tdes";
 				reg = <0xfc044000 0x100>;
@@ -1460,6 +1473,11 @@
 				assigned-clock-rates = <40000000>;
 				bosch,mram-cfg = <0x1100 0 0 64 0 0 32 32>;
 				status = "disabled";
+			};
+
+			sfrbu: sfr@fc05c000 {
+				compatible = "atmel,sama5d2-sfrbu", "syscon";
+				reg = <0xfc05c000 0x20>;
 			};
 
 			chipid@fc069000 {

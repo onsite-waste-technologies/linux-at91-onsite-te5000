@@ -81,13 +81,9 @@ tmp2	.req	r5
 	.arm
 
 /*
- * void at91_pm_suspend_in_sram(void __iomem *pmc, void __iomem *sdramc,
- *			void __iomem *ramc1, int memctrl)
+ * void at91_pm_suspend_in_sram(struct at91_pm_args*)
  * @input param:
- * 	@r0: base address of AT91_PMC
- *  	@r1: base address of SDRAM Controller (SDRAM, DDRSDR, or AT91_SYS)
- *	@r2: base address of second SDRAM Controller or 0 if not present
- *	@r3: pm information
+ * 	@r0: base address of struct
  */
 /* at91_pm_suspend_in_sram must be 8-byte aligned per the requirements of fncpy() */
 	.align 3
@@ -99,29 +95,79 @@ ENTRY(at91_pm_suspend_in_sram)
 	mov	tmp1, #0
 	mcr	p15, 0, tmp1, c7, c10, 4
 
-	str	r0, .pmc_base
-	str	r1, .sramc_base
-	str	r2, .sramc1_base
-
-	and	r0, r3, #AT91_PM_MEMTYPE_MASK
-	str	r0, .memtype
-
-	lsr	r0, r3, #AT91_PM_MODE_OFFSET
-	and	r0, r0, #AT91_PM_MODE_MASK
-	str	r0, .pm_mode
-
-	lsr	r0, r3, #AT91_PM_ULP_OFFSET
-	and	r0, r0, #AT91_PM_ULP_MASK
-	str	r0, .ulp_mode
+	ldr	tmp1, [r0, #0]
+	str	tmp1, .pmc_base
+	ldr	tmp1, [r0, #0x4]
+	str	tmp1, .sramc_base
+	ldr	tmp1, [r0, #0x8]
+	str	tmp1, .sramc1_base
+	ldr	tmp1, [r0, #0xC]
+	str	tmp1, .memtype
+	ldr	tmp1, [r0, #0x10]
+	str	tmp1, .pm_mode
+	ldr	tmp1, [r0, #0x14]
+	str	tmp1, .shdwc
+	cmp	tmp1, #0
+	ldrne	tmp2, [tmp1, #0]
+	ldr	tmp1, [r0, #0x18]
+	str	tmp1, .sfr
+	cmp	tmp1, #0
+	ldrne	tmp2, [tmp1, #0x10]
+	ldr	tmp1, [r0, #0x1C]
+	str	tmp1, .ulp_mode
 
 	/* Active the self-refresh mode */
 	mov	r0, #SRAMC_SELF_FRESH_ACTIVE
 	bl	at91_sramc_self_refresh
 
 	ldr	r0, .pm_mode
-	tst	r0, #AT91_PM_SLOW_CLOCK
-	beq	standby_mode
+	cmp	r0, #AT91_PM_SLOW_CLOCK
+	beq	slow_clock
+	cmp	r0, #AT91_PM_BACKUP
+	beq	backup_mode
+	b	standby_mode
 
+slow_clock:
+	bl	at91_slowck_mode
+	b	exit_suspend
+backup_mode:
+	bl	at91_backup_mode
+	b	exit_suspend
+standby_mode:
+	ldr	pmc, .pmc_base
+
+	/* Wait for interrupt */
+	at91_cpu_idle
+
+exit_suspend:
+	/* Exit the self-refresh mode */
+	mov	r0, #SRAMC_SELF_FRESH_EXIT
+	bl	at91_sramc_self_refresh
+
+	/* Restore registers, and return */
+	ldmfd	sp!, {r4 - r12, pc}
+ENDPROC(at91_pm_suspend_in_sram)
+
+ENTRY(at91_backup_mode)
+	#if 0
+	/* Read LPR */
+	ldr	r2, .sramc_base
+	ldr	r3, [r2, #AT91_DDRSDRC_LPR]
+	#endif
+
+	/* BUMEN */
+	ldr	r0, .sfr
+	mov	tmp1, #(0x1)
+	str	tmp1, [r0, #0x10]
+
+	/* Shutdown */
+	ldr	r0, .shdwc
+	movs	tmp1, #0x1
+	movt	tmp1, #0xA500
+	str	tmp1, [r0, #0]
+ENDPROC(at91_backup_mode)
+
+ENTRY(at91_slowck_mode)
 	ldr	pmc, .pmc_base
 
 	/* Save Master clock setting */
@@ -145,15 +191,103 @@ ENTRY(at91_pm_suspend_in_sram)
 	str	tmp1, [pmc, #AT91_CKGR_PLLAR]
 
 	ldr	r0, .ulp_mode
-	tst	r0, #AT91_PM_ULP1_MODE
-	beq	ulp0_mode
-
-	bl	at91_pm_ulp1_mode
-	b	ulp_exit
+	cmp	r0, #AT91_PM_ULP1_MODE
+	beq	ulp1_mode
 
 ulp0_mode:
-	bl	at91_pm_ulp0_mode
+	ldr	pmc, .pmc_base
+
+	/* Turn off the crystal oscillator */
+	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
+	bic	tmp1, tmp1, #AT91_PMC_MOSCEN
+	orr	tmp1, tmp1, #AT91_PMC_KEY
+	str	tmp1, [pmc, #AT91_CKGR_MOR]
+
+	/* Wait for interrupt */
+	at91_cpu_idle
+
+	/* Turn on the crystal oscillator */
+	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
+	orr	tmp1, tmp1, #AT91_PMC_MOSCEN
+	orr	tmp1, tmp1, #AT91_PMC_KEY
+	str	tmp1, [pmc, #AT91_CKGR_MOR]
+
+	wait_moscrdy
+
 	b	ulp_exit
+
+/*
+ * Note: This procedure only applies on the platform which uses
+ * the external crystal oscillator as a main clock source.
+ */
+ulp1_mode:
+	ldr	pmc, .pmc_base
+
+	/* Switch the main clock source to 12-MHz RC oscillator */
+	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
+	bic	tmp1, tmp1, #AT91_PMC_MOSCSEL
+	bic	tmp1, tmp1, #AT91_PMC_KEY_MASK
+	orr	tmp1, tmp1, #AT91_PMC_KEY
+	str	tmp1, [pmc, #AT91_CKGR_MOR]
+
+	wait_moscsels
+
+	/* Disable the crystal oscillator */
+	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
+	bic	tmp1, tmp1, #AT91_PMC_MOSCEN
+	bic	tmp1, tmp1, #AT91_PMC_KEY_MASK
+	orr	tmp1, tmp1, #AT91_PMC_KEY
+	str	tmp1, [pmc, #AT91_CKGR_MOR]
+
+	/* Switch the master clock source to main clock */
+	ldr	tmp1, [pmc, #AT91_PMC_MCKR]
+	bic	tmp1, tmp1, #AT91_PMC_CSS
+	orr	tmp1, tmp1, #AT91_PMC_CSS_MAIN
+	str	tmp1, [pmc, #AT91_PMC_MCKR]
+
+	wait_mckrdy
+
+	/* Enter the ULP1 mode by set WAITMODE bit in CKGR_MOR */
+	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
+	orr	tmp1, tmp1, #AT91_PMC_WAITMODE
+	bic	tmp1, tmp1, #AT91_PMC_KEY_MASK
+	orr	tmp1, tmp1, #AT91_PMC_KEY
+	str	tmp1, [pmc, #AT91_CKGR_MOR]
+
+	wait_mckrdy
+
+	/* Enable the crystal oscillator */
+	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
+	orr	tmp1, tmp1, #AT91_PMC_MOSCEN
+	bic	tmp1, tmp1, #AT91_PMC_KEY_MASK
+	orr	tmp1, tmp1, #AT91_PMC_KEY
+	str	tmp1, [pmc, #AT91_CKGR_MOR]
+
+	wait_moscrdy
+
+	/* Switch the master clock source to slow clock */
+	ldr	tmp1, [pmc, #AT91_PMC_MCKR]
+	bic	tmp1, tmp1, #AT91_PMC_CSS
+	str	tmp1, [pmc, #AT91_PMC_MCKR]
+
+	wait_mckrdy
+
+	/* Switch main clock source to crystal oscillator */
+	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
+	orr	tmp1, tmp1, #AT91_PMC_MOSCSEL
+	bic	tmp1, tmp1, #AT91_PMC_KEY_MASK
+	orr	tmp1, tmp1, #AT91_PMC_KEY
+	str	tmp1, [pmc, #AT91_CKGR_MOR]
+
+	wait_moscsels
+
+	/* Switch the master clock source to main clock */
+	ldr	tmp1, [pmc, #AT91_PMC_MCKR]
+	bic	tmp1, tmp1, #AT91_PMC_CSS
+	orr	tmp1, tmp1, #AT91_PMC_CSS_MAIN
+	str	tmp1, [pmc, #AT91_PMC_MCKR]
+
+	wait_mckrdy
 
 ulp_exit:
 	ldr	pmc, .pmc_base
@@ -178,22 +312,8 @@ ulp_exit:
 
 	wait_mckrdy
 
-	b	pm_exit
-
-standby_mode:
-	ldr	pmc, .pmc_base
-
-	/* Wait for interrupt */
-	at91_cpu_idle
-
-pm_exit:
-	/* Exit the self-refresh mode */
-	mov	r0, #SRAMC_SELF_FRESH_EXIT
-	bl	at91_sramc_self_refresh
-
-	/* Restore registers, and return */
-	ldmfd	sp!, {r4 - r12, pc}
-ENDPROC(at91_pm_suspend_in_sram)
+	mov	pc, lr
+ENDPROC(at91_slowck_mode)
 
 /*
  * void at91_sramc_self_refresh(unsigned int is_active)
@@ -320,114 +440,15 @@ exit_sramc_sf:
 	mov	pc, lr
 ENDPROC(at91_sramc_self_refresh)
 
-/*
- * void at91_pm_ulp0_mode(void)
- */
-ENTRY(at91_pm_ulp0_mode)
-	ldr	pmc, .pmc_base
-
-	/* Turn off the crystal oscillator */
-	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
-	bic	tmp1, tmp1, #AT91_PMC_MOSCEN
-	orr	tmp1, tmp1, #AT91_PMC_KEY
-	str	tmp1, [pmc, #AT91_CKGR_MOR]
-
-	/* Wait for interrupt */
-	at91_cpu_idle
-
-	/* Turn on the crystal oscillator */
-	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
-	orr	tmp1, tmp1, #AT91_PMC_MOSCEN
-	orr	tmp1, tmp1, #AT91_PMC_KEY
-	str	tmp1, [pmc, #AT91_CKGR_MOR]
-
-	wait_moscrdy
-
-	mov	pc, lr
-ENDPROC(at91_pm_ulp0_mode)
-
-/**
- * void at91_pm_ulp1_mode(void)
- * Note: This procedure only applies on the platform which uses
- * the external crystal oscillator as a main clock source.
- */
-ENTRY(at91_pm_ulp1_mode)
-	ldr	pmc, .pmc_base
-
-	/* Switch the main clock source to 12-MHz RC oscillator */
-	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
-	bic	tmp1, tmp1, #AT91_PMC_MOSCSEL
-	bic	tmp1, tmp1, #AT91_PMC_KEY_MASK
-	orr	tmp1, tmp1, #AT91_PMC_KEY
-	str	tmp1, [pmc, #AT91_CKGR_MOR]
-
-	wait_moscsels
-
-	/* Disable the crystal oscillator */
-	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
-	bic	tmp1, tmp1, #AT91_PMC_MOSCEN
-	bic	tmp1, tmp1, #AT91_PMC_KEY_MASK
-	orr	tmp1, tmp1, #AT91_PMC_KEY
-	str	tmp1, [pmc, #AT91_CKGR_MOR]
-
-	/* Switch the master clock source to main clock */
-	ldr	tmp1, [pmc, #AT91_PMC_MCKR]
-	bic	tmp1, tmp1, #AT91_PMC_CSS
-	orr	tmp1, tmp1, #AT91_PMC_CSS_MAIN
-	str	tmp1, [pmc, #AT91_PMC_MCKR]
-
-	wait_mckrdy
-
-	/* Enter the ULP1 mode by set WAITMODE bit in CKGR_MOR */
-	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
-	orr	tmp1, tmp1, #AT91_PMC_WAITMODE
-	bic	tmp1, tmp1, #AT91_PMC_KEY_MASK
-	orr	tmp1, tmp1, #AT91_PMC_KEY
-	str	tmp1, [pmc, #AT91_CKGR_MOR]
-
-	wait_mckrdy
-
-	/* Enable the crystal oscillator */
-	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
-	orr	tmp1, tmp1, #AT91_PMC_MOSCEN
-	bic	tmp1, tmp1, #AT91_PMC_KEY_MASK
-	orr	tmp1, tmp1, #AT91_PMC_KEY
-	str	tmp1, [pmc, #AT91_CKGR_MOR]
-
-	wait_moscrdy
-
-	/* Switch the master clock source to slow clock */
-	ldr	tmp1, [pmc, #AT91_PMC_MCKR]
-	bic	tmp1, tmp1, #AT91_PMC_CSS
-	str	tmp1, [pmc, #AT91_PMC_MCKR]
-
-	wait_mckrdy
-
-	/* Switch main clock source to crystal oscillator */
-	ldr	tmp1, [pmc, #AT91_CKGR_MOR]
-	orr	tmp1, tmp1, #AT91_PMC_MOSCSEL
-	bic	tmp1, tmp1, #AT91_PMC_KEY_MASK
-	orr	tmp1, tmp1, #AT91_PMC_KEY
-	str	tmp1, [pmc, #AT91_CKGR_MOR]
-
-	wait_moscsels
-
-	/* Switch the master clock source to main clock */
-	ldr	tmp1, [pmc, #AT91_PMC_MCKR]
-	bic	tmp1, tmp1, #AT91_PMC_CSS
-	orr	tmp1, tmp1, #AT91_PMC_CSS_MAIN
-	str	tmp1, [pmc, #AT91_PMC_MCKR]
-
-	wait_mckrdy
-
-	mov	pc, lr
-ENDPROC(at91_pm_ulp1_mode)
-
 .pmc_base:
 	.word 0
 .sramc_base:
 	.word 0
 .sramc1_base:
+	.word 0
+.shdwc:
+	.word 0
+.sfr:
 	.word 0
 .memtype:
 	.word 0

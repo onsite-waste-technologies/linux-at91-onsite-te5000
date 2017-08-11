@@ -31,6 +31,7 @@
 #include <asm/exception.h>
 #include <asm/mach/irq.h>
 
+#include <linux/platform_data/atmel.h>
 #include "irq-atmel-aic-common.h"
 
 /* Number of irq lines managed by AIC */
@@ -150,6 +151,8 @@ static int aic5_set_type(struct irq_data *d, unsigned type)
 }
 
 #ifdef CONFIG_PM
+u32 smr_cache[128];
+
 static void aic5_suspend(struct irq_data *d)
 {
 	struct irq_domain *domain = d->domain;
@@ -159,13 +162,18 @@ static void aic5_suspend(struct irq_data *d)
 	int i;
 	u32 mask;
 
+	for (i = 0; i < domain->revmap_size; i++) {
+		irq_reg_writel(bgc, i, AT91_AIC5_SSR);
+		smr_cache[i] = irq_reg_readl(bgc, AT91_AIC5_SMR);
+	}
+
 	irq_gc_lock(bgc);
 	for (i = 0; i < dgc->irqs_per_chip; i++) {
 		mask = 1 << i;
 		if ((mask & gc->mask_cache) == (mask & gc->wake_active))
 			continue;
 
-		irq_reg_writel(bgc, i + gc->irq_base, AT91_AIC5_SSR);
+		irq_reg_writel(gc, i + gc->irq_base, AT91_AIC5_SSR);
 		if (mask & gc->wake_active)
 			irq_reg_writel(bgc, 1, AT91_AIC5_IECR);
 		else
@@ -184,17 +192,28 @@ static void aic5_resume(struct irq_data *d)
 	u32 mask;
 
 	irq_gc_lock(bgc);
+
+	irq_reg_writel(bgc, 0xffffffff, AT91_AIC5_SPU);
+	for (i = 0; i < domain->revmap_size; i++) {
+		irq_reg_writel(bgc, i, AT91_AIC5_SSR);
+		irq_reg_writel(bgc, i, AT91_AIC5_SVR);
+		irq_reg_writel(bgc, smr_cache[i], AT91_AIC5_SMR);
+	}
+
+
 	for (i = 0; i < dgc->irqs_per_chip; i++) {
 		mask = 1 << i;
+#if 0
 		if ((mask & gc->mask_cache) == (mask & gc->wake_active))
 			continue;
-
+#endif
 		irq_reg_writel(bgc, i + gc->irq_base, AT91_AIC5_SSR);
 		if (mask & gc->mask_cache)
 			irq_reg_writel(bgc, 1, AT91_AIC5_IECR);
 		else
 			irq_reg_writel(bgc, 1, AT91_AIC5_IDCR);
 	}
+
 	irq_gc_unlock(bgc);
 }
 
