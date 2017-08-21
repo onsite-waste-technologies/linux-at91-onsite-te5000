@@ -3,12 +3,13 @@
 #include <linux/clockchips.h>
 #include <linux/interrupt.h>
 #include <linux/irq.h>
-#include <linux/syscore_ops.h>
+
 #include <linux/clk.h>
 #include <linux/err.h>
 #include <linux/ioport.h>
 #include <linux/io.h>
 #include <linux/platform_device.h>
+#include <linux/syscore_ops.h>
 #include <linux/atmel_tc.h>
 
 
@@ -39,7 +40,7 @@
  * For deeper system sleep states, this will be mandatory...
  */
 
-void __iomem *tcaddr;
+static void __iomem *tcaddr;
 static struct
 {
 	u32 cmr;
@@ -47,7 +48,7 @@ static struct
 	u32 rc;
 	bool clken;
 } tcb_cache[3];
-u32 bmr_cache;
+static u32 bmr_cache;
 
 static cycle_t tc_get_cycles(struct clocksource *cs)
 {
@@ -102,12 +103,6 @@ void tc_clksrc_resume(struct clocksource *cs)
 
 	writel(bmr_cache, tcaddr + ATMEL_TC_BMR);
 	writel(ATMEL_TC_SYNC, tcaddr + ATMEL_TC_BCR);
-
-	for (i = 0; i < 3; i++) {
-		tcb_cache[i].cmr = readl(tcaddr + ATMEL_TC_REG(i, CMR));
-		tcb_cache[i].imr = readl(tcaddr + ATMEL_TC_REG(i, IMR));
-		tcb_cache[i].rc = readl(tcaddr + ATMEL_TC_REG(i, RC));
-	}
 }
 
 static struct clocksource clksrc = {
