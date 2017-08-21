@@ -81,9 +81,13 @@ tmp2	.req	r5
 	.arm
 
 /*
- * void at91_pm_suspend_in_sram(struct at91_pm_args*)
+ * void at91_pm_suspend_in_sram(void __iomem *pmc, void __iomem *sdramc,
+ *			void __iomem *ramc1, int memctrl)
  * @input param:
- * 	@r0: base address of struct
+ * 	@r0: base address of AT91_PMC
+ *  	@r1: base address of SDRAM Controller (SDRAM, DDRSDR, or AT91_SYS)
+ *	@r2: base address of second SDRAM Controller or 0 if not present
+ *	@r3: pm information
  */
 /* at91_pm_suspend_in_sram must be 8-byte aligned per the requirements of fncpy() */
 	.align 3
@@ -95,26 +99,20 @@ ENTRY(at91_pm_suspend_in_sram)
 	mov	tmp1, #0
 	mcr	p15, 0, tmp1, c7, c10, 4
 
-	ldr	tmp1, [r0, #0]
-	str	tmp1, .pmc_base
-	ldr	tmp1, [r0, #0x4]
-	str	tmp1, .sramc_base
-	ldr	tmp1, [r0, #0x8]
-	str	tmp1, .sramc1_base
-	ldr	tmp1, [r0, #0xC]
-	str	tmp1, .memtype
-	ldr	tmp1, [r0, #0x10]
-	str	tmp1, .pm_mode
-	ldr	tmp1, [r0, #0x14]
-	str	tmp1, .shdwc
-	cmp	tmp1, #0
-	ldrne	tmp2, [tmp1, #0]
-	ldr	tmp1, [r0, #0x18]
-	str	tmp1, .sfr
-	cmp	tmp1, #0
-	ldrne	tmp2, [tmp1, #0x10]
-	ldr	tmp1, [r0, #0x1C]
-	str	tmp1, .ulp_mode
+	str	r0, .pmc_base
+	str	r1, .sramc_base
+	str	r2, .sramc1_base
+
+	and	r0, r3, #AT91_PM_MEMTYPE_MASK
+	str	r0, .memtype
+
+	lsr	r0, r3, #AT91_PM_MODE_OFFSET
+	and	r0, r0, #AT91_PM_MODE_MASK
+	str	r0, .pm_mode
+
+	lsr	r0, r3, #AT91_PM_ULP_OFFSET
+	and	r0, r0, #AT91_PM_ULP_MASK
+	str	r0, .ulp_mode
 
 	/* Active the self-refresh mode */
 	mov	r0, #SRAMC_SELF_FRESH_ACTIVE
@@ -430,10 +428,6 @@ ENDPROC(at91_pm_ulp1_mode)
 .sramc_base:
 	.word 0
 .sramc1_base:
-	.word 0
-.shdwc:
-	.word 0
-.sfr:
 	.word 0
 .memtype:
 	.word 0
