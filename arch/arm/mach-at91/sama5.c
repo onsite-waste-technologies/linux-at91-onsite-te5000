@@ -15,73 +15,10 @@
 #include <asm/system_misc.h>
 
 #include "generic.h"
-#include "soc.h"
-
-static const struct at91_soc sama5_socs[] = {
-	AT91_SOC(SAMA5D2_CIDR_MATCH, SAMA5D21CU_EXID_MATCH,
-		 "sama5d21", "sama5d2"),
-	AT91_SOC(SAMA5D2_CIDR_MATCH, SAMA5D22CU_EXID_MATCH,
-		 "sama5d22", "sama5d2"),
-	AT91_SOC(SAMA5D2_CIDR_MATCH, SAMA5D23CU_EXID_MATCH,
-		 "sama5d23", "sama5d2"),
-	AT91_SOC(SAMA5D2_CIDR_MATCH, SAMA5D24CX_EXID_MATCH,
-		 "sama5d24", "sama5d2"),
-	AT91_SOC(SAMA5D2_CIDR_MATCH, SAMA5D24CU_EXID_MATCH,
-		 "sama5d24", "sama5d2"),
-	AT91_SOC(SAMA5D2_CIDR_MATCH, SAMA5D26CU_EXID_MATCH,
-		 "sama5d26", "sama5d2"),
-	AT91_SOC(SAMA5D2_CIDR_MATCH, SAMA5D27CU_EXID_MATCH,
-		 "sama5d27", "sama5d2"),
-	AT91_SOC(SAMA5D2_CIDR_MATCH, SAMA5D27CN_EXID_MATCH,
-		 "sama5d27", "sama5d2"),
-	AT91_SOC(SAMA5D2_CIDR_MATCH, SAMA5D28CU_EXID_MATCH,
-		 "sama5d28", "sama5d2"),
-	AT91_SOC(SAMA5D2_CIDR_MATCH, SAMA5D28CN_EXID_MATCH,
-		 "sama5d28", "sama5d2"),
-	AT91_SOC(SAMA5D2_CIDR_MATCH, SAMA5D225C_D1M_EXID_MATCH,
-		"sama5d225c 16MB SiP", "sama5d2"),
-	AT91_SOC(SAMA5D2_CIDR_MATCH, SAMA5D27C_D5M_EXID_MATCH,
-		"sama5d27c 64MB SiP", "sama5d2"),
-	AT91_SOC(SAMA5D2_CIDR_MATCH, SAMA5D27C_D1G_EXID_MATCH,
-		"sama5d27c 128MB SiP", "sama5d2"),
-	AT91_SOC(SAMA5D2_CIDR_MATCH, SAMA5D28C_D1G_EXID_MATCH,
-		"sama5d28c 128MB SiP", "sama5d2"),
-	AT91_SOC(SAMA5D3_CIDR_MATCH, SAMA5D31_EXID_MATCH,
-		 "sama5d31", "sama5d3"),
-	AT91_SOC(SAMA5D3_CIDR_MATCH, SAMA5D33_EXID_MATCH,
-		 "sama5d33", "sama5d3"),
-	AT91_SOC(SAMA5D3_CIDR_MATCH, SAMA5D34_EXID_MATCH,
-		 "sama5d34", "sama5d3"),
-	AT91_SOC(SAMA5D3_CIDR_MATCH, SAMA5D35_EXID_MATCH,
-		 "sama5d35", "sama5d3"),
-	AT91_SOC(SAMA5D3_CIDR_MATCH, SAMA5D36_EXID_MATCH,
-		 "sama5d36", "sama5d3"),
-	AT91_SOC(SAMA5D4_CIDR_MATCH, SAMA5D41_EXID_MATCH,
-		 "sama5d41", "sama5d4"),
-	AT91_SOC(SAMA5D4_CIDR_MATCH, SAMA5D42_EXID_MATCH,
-		 "sama5d42", "sama5d4"),
-	AT91_SOC(SAMA5D4_CIDR_MATCH, SAMA5D43_EXID_MATCH,
-		 "sama5d43", "sama5d4"),
-	AT91_SOC(SAMA5D4_CIDR_MATCH, SAMA5D44_EXID_MATCH,
-		 "sama5d44", "sama5d4"),
-	{ /* sentinel */ },
-};
-
-static void __init sama5_common_init(void)
-{
-	struct soc_device *soc;
-	struct device *soc_dev = NULL;
-
-	soc = at91_soc_init(sama5_socs);
-	if (soc != NULL)
-		soc_dev = soc_device_to_device(soc);
-
-	of_platform_default_populate(NULL, NULL, soc_dev);
-}
 
 static void __init sama5_dt_device_init(void)
 {
-	sama5_common_init();
+	of_platform_default_populate(NULL, NULL, NULL);
 	sama5_pm_init();
 }
 
@@ -108,20 +45,20 @@ DT_MACHINE_START(sama5_alt_dt, "Atmel SAMA5")
 	.l2c_aux_mask	= ~0UL,
 MACHINE_END
 
-static void __init sama5d2_dt_device_init(void)
+static void __init sama5d2_init(void)
 {
-	sama5_common_init();
+	of_platform_default_populate(NULL, NULL, NULL);
 	sama5d2_pm_init();
 }
 
-static const char *const sama5d2_dt_board_compat[] __initconst = {
+static const char *const sama5d2_compat[] __initconst = {
 	"atmel,sama5d2",
 	NULL
 };
 
-DT_MACHINE_START(sama5d2_dt, "Atmel SAMA5")
+DT_MACHINE_START(sama5d2, "Atmel SAMA5")
 	/* Maintainer: Atmel */
-	.init_machine	= sama5d2_dt_device_init,
-	.dt_compat	= sama5d2_dt_board_compat,
+	.init_machine	= sama5d2_init,
+	.dt_compat	= sama5d2_compat,
 	.l2c_aux_mask	= ~0UL,
 MACHINE_END
