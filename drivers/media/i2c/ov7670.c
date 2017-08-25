@@ -1705,11 +1705,13 @@ static int ov7670_probe(struct i2c_client *client,
 			       V4L2_EXPOSURE_MANUAL, false);
 	v4l2_ctrl_cluster(2, &info->saturation);
 
+#if defined(CONFIG_MEDIA_CONTROLLER)
 	info->pad.flags = MEDIA_PAD_FL_SOURCE;
 	info->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
 	ret = media_entity_pads_init(&info->sd.entity, 1, &info->pad);
 	if (ret < 0)
 		goto hdl_free;
+#endif
 
 	v4l2_ctrl_handler_setup(&info->hdl);
 
@@ -1720,7 +1722,9 @@ static int ov7670_probe(struct i2c_client *client,
 	return 0;
 
 failed_sd:
+#if defined(CONFIG_MEDIA_CONTROLLER)
 	media_entity_cleanup(&info->sd.entity);
+#endif
 hdl_free:
 	v4l2_ctrl_handler_free(&info->hdl);
 power_off:
@@ -1739,7 +1743,9 @@ static int ov7670_remove(struct i2c_client *client)
 	v4l2_device_unregister_subdev(sd);
 	v4l2_ctrl_handler_free(&info->hdl);
 	clk_disable_unprepare(info->clk);
+#if defined(CONFIG_MEDIA_CONTROLLER)
 	media_entity_cleanup(&info->sd.entity);
+#endif
 	ov7670_s_power(sd, 0);
 	return 0;
 }
