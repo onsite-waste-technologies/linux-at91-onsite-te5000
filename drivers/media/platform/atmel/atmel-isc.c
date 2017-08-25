@@ -323,6 +323,34 @@ module_param(sensor_preferred, uint, 0644);
 MODULE_PARM_DESC(sensor_preferred,
 		 "Sensor is preferred to output the specified format (1-on 0-off), default 1");
 
+static int isc_wait_clk_stable(struct clk_hw *hw)
+{
+	struct isc_clk *isc_clk = to_isc_clk(hw);
+	struct regmap *regmap = isc_clk->regmap;
+	unsigned long timeout = jiffies + usecs_to_jiffies(1000);
+	unsigned int status;
+
+	while (time_before(jiffies, timeout)) {
+		regmap_read(regmap, ISC_CLKSR, &status);
+		if (!(status & ISC_CLKSR_SIP))
+			return 0;
+
+		usleep_range(10, 250);
+	}
+
+	return -ETIMEDOUT;
+}
+
+static int isc_clk_prepare(struct clk_hw *hw)
+{
+	return isc_wait_clk_stable(hw);
+}
+
+static void isc_clk_unprepare(struct clk_hw *hw)
+{
+	isc_wait_clk_stable(hw);
+}
+
 static int isc_clk_enable(struct clk_hw *hw)
 {
 	struct isc_clk *isc_clk = to_isc_clk(hw);
@@ -463,6 +491,8 @@ static int isc_clk_set_rate(struct clk_hw *hw,
 }
 
 static const struct clk_ops isc_clk_ops = {
+	.prepare	= isc_clk_prepare,
+	.unprepare	= isc_clk_unprepare,
 	.enable		= isc_clk_enable,
 	.disable	= isc_clk_disable,
 	.is_enabled	= isc_clk_is_enabled,
@@ -1834,25 +1864,37 @@ static int atmel_isc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	ret = clk_prepare_enable(isc->hclock);
+	if (ret) {
+		dev_err(dev, "failed to enable hclock: %d\n", ret);
+		return ret;
+	}
+
 	ret = isc_clk_init(isc);
 	if (ret) {
 		dev_err(dev, "failed to init isc clock: %d\n", ret);
-		goto clean_isc_clk;
+		goto unprepare_hclk;
 	}
 
 	isc->ispck = isc->isc_clks[ISC_ISPCK].clk;
+
+	ret = clk_prepare_enable(isc->ispck);
+	if (ret) {
+		dev_err(dev, "failed to enable ispck: %d\n", ret);
+		goto unprepare_hclk;
+	}
 
 	/* ispck should be greater or equal to hclock */
 	ret = clk_set_rate(isc->ispck, clk_get_rate(isc->hclock));
 	if (ret) {
 		dev_err(dev, "failed to set ispck rate: %d\n", ret);
-		goto clean_isc_clk;
+		goto unprepare_clk;
 	}
 
 	ret = v4l2_device_register(dev, &isc->v4l2_dev);
 	if (ret) {
 		dev_err(dev, "unable to register v4l2 device.\n");
-		goto clean_isc_clk;
+		goto unprepare_clk;
 	}
 
 	ret = isc_parse_dt(dev, isc);
@@ -1895,7 +1937,11 @@ cleanup_subdev:
 unregister_v4l2_device:
 	v4l2_device_unregister(&isc->v4l2_dev);
 
-clean_isc_clk:
+unprepare_clk:
+	clk_disable_unprepare(isc->ispck);
+unprepare_hclk:
+	clk_disable_unprepare(isc->hclock);
+
 	isc_clk_cleanup(isc);
 
 	return ret;
