@@ -52,6 +52,12 @@
 	model = "Atmel SAMA5D27 SOM1 EK";
 	compatible = "atmel,sama5d27-som1-ek", "atmel,sama5d27-som1", "atmel,sama5d27", "atmel,sama5d2", "atmel,sama5";
 
+	aliases {
+		serial0 = &uart1;	/* DBGU */
+		serial1 = &uart4;	/* mikro BUS 1 */
+		serial2 = &uart2;	/* mikro BUS 2 */
+	};
+
 	chosen {
 		stdout-path = "serial0:115200n8";
 	};
@@ -137,7 +143,7 @@
 				pinctrl-names = "default";
 				pinctrl-0 = <&pinctrl_mikrobus2_uart>;
 				atmel,use-dma-rx;
-				atmel-use-dma-tx;
+				atmel,use-dma-tx;
 				status = "okay";
 			};
 
@@ -190,7 +196,7 @@
 			uart4: serial@fc00c000 {
 				atmel,use-dma-rx;
 				atmel,use-dma-tx;
-				pinctrl-name = "default";
+				pinctrl-names = "default";
 				pinctrl-0 = <&pinctrl_mikrobus1_uart>;
 				status = "okay";
 			};
