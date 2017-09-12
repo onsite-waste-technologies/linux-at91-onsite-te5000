@@ -106,6 +106,7 @@
 				pinctrl-names = "default";
 				pinctrl-0 = <&pinctrl_mmc1_clk_cmd_dat0 &pinctrl_mmc1_dat1_3>;
 				non-removable;
+				vmmc-supply = <&vcc_mmc1_reg>;
 				vqmmc-supply = <&vcc_3v3_reg>;
 				status = "okay";
 				slot@0 {
@@ -127,6 +128,12 @@
 			spi1: spi@fc018000 {
 				cs-gpios = <&pioB 21 0>;
 				status = "okay";
+				wilc_spi@0 {
+					compatible = "atmel,wilc_spi";
+					spi-max-frequency = <48000000>;
+					reg = <0>;
+					status = "okay";
+				};
 			};
 
 			adc0: adc@fc034000 {
