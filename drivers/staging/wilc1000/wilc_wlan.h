@@ -3,7 +3,8 @@
 
 #include <linux/types.h>
 
-#define ISWILC1000(id)			((id & 0xfffff000) == 0x100000 ? 1 : 0)
+#define ISWILC1000(id)			(((id) & 0xfffff000) == 0x100000 ? 1 : 0)
+#define ISWILC3000(id)			(((id) & 0xfffff000) == 0x300000 ? 1 : 0)
 
 /********************************************
  *
@@ -34,6 +35,8 @@
 
 #define ETH_CONFIG_PKT_HDR_OFFSET	(ETH_ETHERNET_HDR_OFFSET + \
 					 ETH_CONFIG_PKT_HDR_LEN)
+#define PKT_STATUS_NEW          0
+#define PKT_STATUS_BUFFERED     1
 
 /********************************************
  *
@@ -52,6 +55,7 @@
 #define WILC_HOST_RX_CTRL		(WILC_PERIPH_REG_BASE + 0x80)
 #define WILC_HOST_RX_EXTRA_SIZE		(WILC_PERIPH_REG_BASE + 0x84)
 #define WILC_HOST_TX_CTRL_1		(WILC_PERIPH_REG_BASE + 0x88)
+#define WILC_INTERRUPT_CORTUS_0		(WILC_PERIPH_REG_BASE + 0xa8)
 #define WILC_MISC			(WILC_PERIPH_REG_BASE + 0x428)
 #define WILC_INTR_REG_BASE		(WILC_PERIPH_REG_BASE + 0xa00)
 #define WILC_INTR_ENABLE		WILC_INTR_REG_BASE
@@ -98,6 +102,12 @@
 #define WILC_GP_REG_0			0x149c
 #define WILC_GP_REG_1			0x14a0
 
+#define WILC_COEXIST_CTL		0x161E00
+#define WILC_GLOBAL_MODE_CONTROL	0x1614
+#define WILC_PWR_SEQ_MISC_CTRL		0x3008
+#define WILC_COE_AUTO_PS_ON_NULL_PKT	0x160468
+#define WILC_COE_AUTO_PS_OFF_NULL_PKT	0x16046C
+
 #define WILC_HAVE_SDIO_IRQ_GPIO		BIT(0)
 #define WILC_HAVE_USE_PMU		BIT(1)
 #define WILC_HAVE_SLEEP_CLK_SRC_RTC	BIT(2)
@@ -107,6 +117,8 @@
 #define WILC_HAVE_XTAL_24		BIT(6)
 #define WILC_HAVE_DISABLE_WILC_UART	BIT(7)
 #define WILC_HAVE_USE_IRQ_AS_HOST_WAKE	BIT(8)
+#define WILC_HAVE_ANT_SWTCH_SNGL_GPIO_CTRL BIT(9)
+#define WILC_HAVE_ANT_SWTCH_DUAL_GPIO_CTRL BIT(10)
 
 /********************************************
  *
@@ -132,7 +144,21 @@
 #define LINUX_TX_SIZE		(64 * 1024)
 
 #define MODALIAS		"WILC_SPI"
-#define GPIO_NUM		0x44
+#define GPIO_NUM		0x5B
+#define GPIO_NUM_CHIP_EN	94
+#define GPIO_NUM_RESET		60
+
+
+#define NQUEUES			4
+#define VO_AC_COUNT_POS		25
+#define VO_AC_ACM_STAT_POS	24
+#define VI_AC_COUNT_POS		17
+#define VI_AC_ACM_STAT_POS	16
+#define BE_AC_COUNT_POS		9
+#define BE_AC_ACM_STAT_POS	8
+#define BK_AC_COUNT_POS		2
+#define BK_AC_ACM_STAT_POS	1
+#define AC_BUFFER_SIZE		1000
 /*******************************************/
 /*        E0 and later Interrupt flags.    */
 /*******************************************/
@@ -206,11 +232,25 @@ typedef void (*wilc_debug_func)(u32, char *, ...);
  *      Tx/Rx Queue Structure
  *
  ********************************************/
+struct txq_handle {
+	struct txq_entry_t *txq_head;
+	struct txq_entry_t *txq_tail;
+	u16 count;
+	u8 acm;
+};
+
+enum ip_pkt_priority {
+	AC_VO_Q = 0,
+	AC_VI_Q = 1,
+	AC_BE_Q = 2,
+	AC_BK_Q = 3
+};
 
 struct txq_entry_t {
 	struct txq_entry_t *next;
 	struct txq_entry_t *prev;
 	int type;
+	u8 q_num;
 	int tcp_pending_ack_idx;
 	u8 *buffer;
 	int buffer_size;
@@ -223,6 +263,11 @@ struct rxq_entry_t {
 	struct rxq_entry_t *next;
 	u8 *buffer;
 	int buffer_size;
+};
+
+enum wilc_chip_id {
+	WILC_1000,
+	WILC_3000,
 };
 
 /********************************************
@@ -247,9 +292,6 @@ struct wilc_hif_func {
 	int (*enable_interrupt)(struct wilc *nic);
 	void (*disable_interrupt)(struct wilc *nic);
 };
-
-extern const struct wilc_hif_func wilc_hif_spi;
-extern const struct wilc_hif_func wilc_hif_sdio;
 
 /********************************************
  *
@@ -297,9 +339,6 @@ void wilc_enable_tcp_ack_filter(bool value);
 int wilc_wlan_get_num_conn_ifcs(struct wilc *);
 int wilc_mac_xmit(struct sk_buff *skb, struct net_device *dev);
 
-int wilc_mac_open(struct net_device *ndev);
-int wilc_mac_close(struct net_device *ndev);
-
 void WILC_WFI_p2p_rx(struct net_device *dev, u8 *buff, u32 size);
 void host_wakeup_notify(struct wilc *wilc);
 void host_sleep_notify(struct wilc *wilc);
@@ -308,4 +347,10 @@ void chip_allow_sleep(struct wilc *wilc);
 void chip_wakeup(struct wilc *wilc);
 int wilc_send_config_pkt(struct wilc_vif *vif, u8 mode, struct wid *wids,
 			 u32 count, u32 drv);
+void wilc_wlan_power_on_sequence(void);
+void wilc_wlan_power_off_sequence(void);
+
+void wilc_bt_init(struct wilc *wilc);
+void wilc_bt_deinit(void);
+void eap_buff_timeout(unsigned long pUserVoid);
 #endif

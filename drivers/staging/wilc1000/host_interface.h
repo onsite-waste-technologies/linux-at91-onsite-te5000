@@ -1,6 +1,6 @@
 #ifndef HOST_INT_H
 #define HOST_INT_H
-
+#include <linux/ieee80211.h>
 #include "coreconfigurator.h"
 
 #define IP_ALEN  4
@@ -51,6 +51,8 @@
 #define WILC_ADD_STA_LENGTH			40
 #define SCAN_EVENT_DONE_ABORTED
 #define NUM_CONCURRENT_IFC			2
+#define DRV_HANDLER_SIZE			5
+#define DRV_HANDLER_MASK			0x000000FF
 
 struct rf_info {
 	u8 link_speed;
@@ -180,6 +182,10 @@ typedef void (*wilc_connect_result)(enum conn_event,
 typedef void (*wilc_remain_on_chan_expired)(void *, u32);
 typedef void (*wilc_remain_on_chan_ready)(void *);
 
+typedef void (*wilc_frmw_to_linux)(struct wilc *, u8 *, unsigned int,
+				   unsigned int, u8);
+typedef void (*free_eap_buf_param)(void *);
+
 struct rcvd_net_info {
 	u8 *buffer;
 	u32 len;
@@ -217,7 +223,8 @@ struct user_conn_req {
 
 struct drv_handler {
 	u32 handler;
-	u8 mac_idx;
+	u8 mode;
+	u8 name;
 };
 
 struct op_mode {
@@ -281,6 +288,7 @@ struct host_if_drv {
 	struct timer_list remain_on_ch_timer;
 
 	bool IFC_UP;
+	int driver_handler_id;
 };
 
 struct add_sta_param {
@@ -300,6 +308,25 @@ struct add_sta_param {
 };
 
 struct wilc_vif;
+#ifdef WILC_BT_COEXISTENCE
+enum coex_mode {
+	COEX_OFF = 0,
+	COEX_ON, 		
+	COEX_FORCE_WIFI,
+	COEX_FORCE_BT,
+};
+
+enum coex_null_frames_mode {
+	COEX_NULL_FRAMES_OFF = 0,
+	COEX_NULL_FRAMES_ON, 		
+};
+#endif /*WILC_BT_COEXISTENCE*/
+signed int wilc_send_buffered_eap(struct wilc_vif *vif,
+				  wilc_frmw_to_linux frmw_to_linux,
+				  free_eap_buf_param eap_buf_param,
+				  u8 *buff, unsigned int size,
+				  unsigned int pkt_offset,
+				  void *user_arg);
 s32 wilc_remove_key(struct host_if_drv *hWFIDrv, const u8 *pu8StaAddress);
 int wilc_remove_wep_key(struct wilc_vif *vif, u8 index);
 int wilc_set_wep_default_keyid(struct wilc_vif *vif, u8 index);
@@ -354,13 +381,19 @@ int wilc_remain_on_channel(struct wilc_vif *vif, u32 session_id,
 			   void *user_arg);
 int wilc_listen_state_expired(struct wilc_vif *vif, u32 session_id);
 int wilc_frame_register(struct wilc_vif *vif, u16 frame_type, bool reg);
-int wilc_set_wfi_drv_handler(struct wilc_vif *vif, int index, u8 mac_idx);
+int wilc_set_wfi_drv_handler(struct wilc_vif *vif, int index, u8 mode,
+			     u8 ifc_id);
 int wilc_set_operation_mode(struct wilc_vif *vif, u32 mode);
 int wilc_get_statistics(struct wilc_vif *vif, struct rf_info *stats);
 void wilc_resolve_disconnect_aberration(struct wilc_vif *vif);
 int wilc_get_vif_idx(struct wilc_vif *vif);
 int wilc_set_tx_power(struct wilc_vif *vif, u8 tx_power);
 int wilc_get_tx_power(struct wilc_vif *vif, u8 *tx_power);
+int wilc_set_antenna(struct wilc_vif *vif, u8 mode);
+#ifdef WILC_BT_COEXISTENCE
+int wilc_change_bt_coex_mode(struct wilc_vif *vif,
+			     enum coex_mode bt_coex_mode);
+#endif	/*WILC_BT_COEXISTENCE*/
 
 extern bool wilc_optaining_ip;
 extern u8 wilc_connected_ssid[6];
@@ -368,6 +401,8 @@ extern u8 wilc_multicast_mac_addr_list[WILC_MULTICAST_TABLE_SIZE][ETH_ALEN];
 
 extern int wilc_connecting;
 extern u8 wilc_initialized;
+extern struct timer_list eap_buff_timer;
 extern struct timer_list wilc_during_ip_timer;
+s32 Handle_ScanDone(struct wilc_vif *vif, enum scan_event enuEvent);
 
 #endif

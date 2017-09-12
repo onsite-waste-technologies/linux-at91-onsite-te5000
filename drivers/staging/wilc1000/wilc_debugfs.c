@@ -17,11 +17,10 @@
 
 #include "wilc_wlan_if.h"
 
-
 static struct dentry *wilc_dir;
 
 /*
- * --------------------------------------------------------------------------------
+ * ----------------------------------------------------------------------------
  */
 #define DEBUG           BIT(0)
 #define INFO            BIT(1)
@@ -33,11 +32,11 @@ static atomic_t WILC_DEBUG_LEVEL = ATOMIC_INIT(ERR);
 EXPORT_SYMBOL_GPL(WILC_DEBUG_LEVEL);
 
 /*
- * --------------------------------------------------------------------------------
+ * ----------------------------------------------------------------------------
  */
 
-
-static ssize_t wilc_debug_level_read(struct file *file, char __user *userbuf, size_t count, loff_t *ppos)
+static ssize_t wilc_debug_level_read(struct file *file, char __user *userbuf,
+				     size_t count, loff_t *ppos)
 {
 	char buf[128];
 	int res = 0;
@@ -51,8 +50,9 @@ static ssize_t wilc_debug_level_read(struct file *file, char __user *userbuf, si
 	return simple_read_from_buffer(userbuf, count, ppos, buf, res);
 }
 
-static ssize_t wilc_debug_level_write(struct file *filp, const char __user *buf,
-					size_t count, loff_t *ppos)
+static ssize_t wilc_debug_level_write(struct file *filp,
+				      const char __user *buf, size_t count,
+				      loff_t *ppos)
 {
 	int flag = 0;
 	int ret;
@@ -77,7 +77,7 @@ static ssize_t wilc_debug_level_write(struct file *filp, const char __user *buf,
 }
 
 /*
- * --------------------------------------------------------------------------------
+ * ----------------------------------------------------------------------------
  */
 
 #define FOPS(_open, _read, _write, _poll) { \
@@ -96,7 +96,12 @@ struct wilc_debugfs_info_t {
 };
 
 static struct wilc_debugfs_info_t debugfs_info[] = {
-	{ "wilc_debug_level",	0666,	(DEBUG | ERR), FOPS(NULL, wilc_debug_level_read, wilc_debug_level_write, NULL), },
+	{
+		"wilc_debug_level",
+		0666,
+		(DEBUG | ERR),
+		FOPS(NULL, wilc_debug_level_read, wilc_debug_level_write, NULL),
+	},
 };
 
 static int __init wilc_debugfs_init(void)
@@ -124,4 +129,3 @@ static void __exit wilc_debugfs_remove(void)
 module_exit(wilc_debugfs_remove);
 
 #endif
-

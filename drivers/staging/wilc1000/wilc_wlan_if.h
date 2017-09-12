@@ -24,6 +24,16 @@
 
 /********************************************
  *
+ *      Firmware Defines
+ *
+ ********************************************/
+#define	FIRMWARE_1002			"wilc1000_wifi_firmware.bin"
+#define	FIRMWARE_1003			"wilc1000_wifi_firmware.bin"
+#define	FIRMWARE_WILC3000_WIFI		"wilc3000_wifi_firmware.bin"
+#define	FIRMWARE_WILC3000_BT		"wilc3000_bt_firmware.bin"
+
+/********************************************
+ *
  *      Wlan Interface Defines
  *
  ********************************************/
@@ -273,6 +283,13 @@ enum wid_type {
 	WID_TYPE_FORCE_32BIT	= 0xFFFFFFFF
 };
 
+enum antenna_type {
+	ANTENNA1		= 0,
+	ANTENNA2		= 1,
+	DIVERSITY		= 2,
+	NUM_ANT_MODE
+};
+
 struct wid {
 	u16 id;
 	enum wid_type type;
@@ -336,6 +353,9 @@ typedef enum {
 	 *  -----------------------------------------------------------
 	 */
 	WID_STATUS			= 0x0005,
+#ifdef WILC_BT_COEXISTENCE
+	WID_BT_COEX_MODE		= 0x0006,
+#endif
 
 	/*
 	 *  Scan type
@@ -431,6 +451,17 @@ typedef enum {
 	 */
 	WID_ACK_POLICY			= 0x0011,
 
+#ifdef WILC_BT_COEXISTENCE
+	/*
+	 *  Set coex null frames transmission mode 
+	 * --------------------------------------------------------------
+ 	 *  Configuration :   Enable	Disable
+	 *  Values to set :       1			0
+	 * --------------------------------------------------------------
+	 */
+	WID_COEX_NULL_FRAMES_MODE               = 0x0013,
+#endif
+
 	/*
 	 *  Reset MAC (Set only)
 	 *  -----------------------------------------------------------
@@ -523,6 +554,8 @@ typedef enum {
 	 *  -----------------------------------------------------------
 	 */
 	WID_JOIN_REQ			= 0x0020,
+
+	WID_ANTENNA_SELECTION		= 0x0021,
 
 	WID_LINKSPEED			= 0x0026,
 
@@ -741,7 +774,8 @@ typedef enum {
 	WID_DEL_BEACON			= 0x00CA,
 
 	WID_LOGTerminal_Switch		= 0x00CD,
-	WID_TX_POWER			= 0x00CE,
+	WID_TX_POWER						= 0x00CE,
+	WID_WOWLAN_TRIGGER			=0X00CF,
 	/*  EMAC Short WID list */
 	/*  RTS Threshold */
 	/*
@@ -845,7 +879,7 @@ typedef enum {
 	WID_MODEL_NAME			= 0x3027, /*Added for CAPI tool */
 	WID_MODEL_NUM			= 0x3028, /*Added for CAPI tool */
 	WID_DEVICE_NAME			= 0x3029, /*Added for CAPI tool */
-	WID_SET_DRV_HANDLER		= 0x3030,
+	WID_SET_DRV_HANDLER		= 0x3079,
 
 	/* NMAC String WID list */
 	WID_11N_P_ACTION_REQ		= 0x3080,
@@ -889,6 +923,12 @@ typedef enum {
 	WID_ALL				= 0x7FFE,
 	WID_MAX				= 0xFFFF
 } WID_T;
+
+enum device_active {
+	NONE = 0,
+	WLAN_ACTTIVE = 1,
+	BT_ACTTIVE = 2,
+};
 
 struct wilc;
 int wilc_wlan_init(struct net_device *dev);

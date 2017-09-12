@@ -97,6 +97,13 @@ struct wilc_wfi_p2pListenParams {
 	u32 u32ListenSessionID;
 };
 
+/* Struct to buffer eapol 1/4 frame */
+struct wilc_buffered_eap {
+	unsigned int size;
+	unsigned int pkt_offset;
+	u8 *buff;
+};
+
 struct wilc_priv {
 	struct wireless_dev *wdev;
 	struct cfg80211_scan_request *pstrScanReq;
@@ -137,6 +144,7 @@ struct wilc_priv {
 	bool gbAutoRateAdjusted;
 
 	bool bInP2PlistenState;
+	struct wilc_buffered_eap *buffered_eap;
 
 };
 
@@ -158,6 +166,9 @@ struct wilc_vif {
 	struct host_if_drv *hif_drv;
 	struct net_device *ndev;
 	u8 mode;
+	u8 ifc_id;
+	bool ifc_open;
+	bool p2p_mode;
 };
 
 struct wilc {
@@ -174,6 +185,7 @@ struct wilc {
 
 	struct mutex txq_add_to_head_cs;
 	spinlock_t txq_spinlock;
+	spinlock_t cfg_pkt_spinlock;
 
 	struct mutex rxq_cs;
 	struct mutex hif_cs;
@@ -182,9 +194,10 @@ struct wilc {
 	struct completion sync_event;
 	struct completion txq_event;
 	struct completion txq_thread_started;
-
+	struct completion debug_thread_started;
 	struct task_struct *txq_thread;
-
+	struct task_struct *debug_thread;
+	
 	int quit;
 	int cfg_frame_in_use;
 	struct wilc_cfg_frame cfg_frame;
@@ -196,9 +209,11 @@ struct wilc {
 	u8 *tx_buffer;
 
 	unsigned long txq_spinlock_flags;
+	unsigned long cfg_pkt_flags;
 
 	struct txq_entry_t *txq_head;
 	struct txq_entry_t *txq_tail;
+	struct txq_handle txq[NQUEUES];
 	int txq_entries;
 	int txq_exit;
 
@@ -215,21 +230,24 @@ struct wilc {
 	bool suspend_event;
 
 	struct rf_info dummy_statistics;
+
+	enum wilc_chip_id chip_id;
+	enum device_active dev_active;
 };
 
 struct WILC_WFI_mon_priv {
 	struct net_device *real_ndev;
 };
 
-int wilc1000_wlan_init(struct net_device *dev, struct wilc_vif *vif);
+int wilc_wlan_initialize(struct net_device *dev, struct wilc_vif *vif);
 
-void wilc_frmw_to_linux(struct wilc *wilc, u8 *buff, u32 size, u32 pkt_offset);
+//void wilc_frmw_to_linux(struct wilc *wilc, u8 *buff, u32 size, u32 pkt_offset);
 void wilc_mac_indicate(struct wilc *wilc, int flag);
 int wilc_lock_timeout(struct wilc *wilc, void *, u32 timeout);
 void wilc_netdev_cleanup(struct wilc *wilc);
 int wilc_netdev_init(struct wilc **wilc, struct device *, int io_type, int gpio,
 		     const struct wilc_hif_func *ops);
-void wilc1000_wlan_deinit(struct net_device *dev);
+void wilc_wlan_deinitialize(struct net_device *dev);
 void WILC_WFI_mgmt_rx(struct wilc *wilc, u8 *buff, u32 size);
 int wilc_wlan_get_firmware(struct net_device *dev);
 int wilc_wlan_set_bssid(struct net_device *wilc_netdev, u8 *bssid, u8 mode);
