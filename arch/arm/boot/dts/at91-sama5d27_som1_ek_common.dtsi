@@ -47,6 +47,7 @@
 #include "at91-sama5d27_som1.dtsi"
 #include <dt-bindings/mfd/atmel-flexcom.h>
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/at91.h>
 
 / {
 	model = "Atmel SAMA5D27 SOM1 EK";
@@ -180,7 +181,9 @@
 			};
 
 			pwm0: pwm@f802c000 {
-				status = "okay";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_mikrobus1_pwm &pinctrl_mikrobus2_pwm>;
+				status = "disabled"; /* Conflict with leds. */
 			};
 
 			flx1: flexcom@f8038000 {
@@ -321,6 +324,7 @@
 						 <PIN_PC8__LCDDEN>,
 						 <PIN_PC7__LCDPCK>;
 					bias-disable;
+					drive-strength = <ATMEL_PIO_DRVSTR_ME>;
 				};
 
 				pinctrl_lcd_rgb: pinctrl_lcd_rgb {
@@ -608,7 +612,7 @@
 		compatible = "gpio-leds";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_led_gpio_default>;
-		status = "okay";
+		status = "okay"; /* Conflict with pwm0. */
 
 		red {
 			label = "red";
