@@ -309,7 +309,7 @@
 
 			pwm0: pwm@f802c000 {
 				pinctrl-names = "default";
-				pinctrl-0 = <&pinctrl_pwm_ch2_default>;
+				pinctrl-0 = <&pinctrl_pwm0_pwm2_default>;
 				status = "disabled"; /* conflict with leds */
 			};
 
@@ -657,7 +657,7 @@
 					bias-disable;
 				};
 
-				pinctrl_pwm_ch2_default: pwm_ch2_default {
+				pinctrl_pwm0_pwm2_default: pwm0_pwm2_default {
 					pinmux = <PIN_PB5__PWMH2>,
 						 <PIN_PB6__PWML2>;
 					bias-pull-up;
