@@ -188,6 +188,19 @@ static int sdhci_at91_set_clks_presets(struct device *dev)
 	clk_prepare_enable(priv->hclock);
 	caps0 = readl(host->ioaddr + SDHCI_CAPABILITIES);
 	caps1 = readl(host->ioaddr + SDHCI_CAPABILITIES_1);
+
+	/*
+	 * We experience some issues with SDR104. If the SD clock is higher
+	 * than 100 MHz, we can get data corruption. With a 100 MHz clock,
+	 * the tuning procedure may fail. For those reasons, it is useless to
+	 * advertise that we can use SDR104 mode, so remove it from
+	 * the capabilities.
+	 */
+	writel(SDMMC_CACR_KEY | SDMMC_CACR_CAPWREN, host->ioaddr + SDMMC_CACR);
+	caps1 &= (~SDHCI_SUPPORT_SDR104);
+	writel(caps1, host->ioaddr + SDHCI_CAPABILITIES_1);
+	writel(0, host->ioaddr + SDMMC_CACR);
+
 	clk_base = (caps0 & SDHCI_CLOCK_V3_BASE_MASK) >> SDHCI_CLOCK_BASE_SHIFT;
 	clk_mul = (caps1 & SDHCI_CLOCK_MUL_MASK) >> SDHCI_CLOCK_MUL_SHIFT;
 	gck_rate = clk_base * 1000000 * (clk_mul + 1);
