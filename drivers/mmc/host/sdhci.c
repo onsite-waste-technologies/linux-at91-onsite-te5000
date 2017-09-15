@@ -2093,7 +2093,16 @@ static int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
 		spin_lock_irqsave(&host->lock, flags);
 
 		if (!host->tuning_done) {
-			pr_info(DRIVER_NAME ": Timeout waiting for Buffer Read Ready interrupt during tuning procedure, falling back to fixed sampling clock\n");
+			/*
+			 * Tuning for DDR50 mode appeared in the SD 3.0.1
+			 * specification. If the card is only compliant with
+			 * SD 3.0 and not SD 3.0.1 (as most of the SD cards),
+			 * CMD19 will fail. In this case, the failure is not
+			 * an error. It's useless to display that we fall back
+			 * to fixed sampling clock at each tuning procedure.
+			 */
+			if (host->timing != MMC_TIMING_UHS_DDR50)
+				pr_info(DRIVER_NAME ": Timeout waiting for Buffer Read Ready interrupt during tuning procedure, falling back to fixed sampling clock\n");
 			ctrl = sdhci_readw(host, SDHCI_HOST_CONTROL2);
 			ctrl &= ~SDHCI_CTRL_TUNED_CLK;
 			ctrl &= ~SDHCI_CTRL_EXEC_TUNING;
