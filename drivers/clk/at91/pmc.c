@@ -21,6 +21,8 @@
 
 #include "pmc.h"
 
+#define PMC_MAX_PCKS 8
+
 int of_at91_get_clk_range(struct device_node *np, const char *propname,
 			  struct clk_range *range)
 {
@@ -47,6 +49,8 @@ EXPORT_SYMBOL_GPL(of_at91_get_clk_range);
 #ifdef CONFIG_PM
 static struct regmap *pmcreg;
 
+static u8 registered_pcks[PMC_MAX_PCKS];
+
 static struct
 {
 	u32 scsr;
@@ -60,7 +64,23 @@ static struct
 	u32 imr;
 	u32 pcsr1;
 	u32 pcr[64];
+	u32 pckr[PMC_MAX_PCKS];
 } pmc_cache;
+
+/* Programmable Clock 0 is valid */
+void pmc_register_pck(u8 pck)
+{
+	int i;
+
+	for (i = 0; i < PMC_MAX_PCKS; i++) {
+		if (registered_pcks[i] == 0) {
+			registered_pcks[i] = pck + 1;
+			break;
+		}
+		if (registered_pcks[i] == (pck + 1))
+			break;
+	}
+}
 
 static int pmc_suspend(void)
 {
@@ -80,6 +100,12 @@ static int pmc_suspend(void)
 	for (i = 2; i < 64; i++) {
 		regmap_write(pmcreg, AT91_PMC_PCR, (i & AT91_PMC_PCR_PID_MASK));
 		regmap_read(pmcreg, AT91_PMC_PCR, &pmc_cache.pcr[i]);
+	}
+
+	for (i = 0; registered_pcks[i]; i++) {
+		u8 num = registered_pcks[i] - 1;
+
+		regmap_read(pmcreg, AT91_PMC_PCKR(num), &pmc_cache.pckr[num]);
 	}
 
 	return 0;
@@ -119,6 +145,11 @@ static void pmc_resume(void)
 	for (i = 2; i < 64; i++) {
 		regmap_write(pmcreg, AT91_PMC_PCR, (i & AT91_PMC_PCR_PID_MASK));
 		regmap_write(pmcreg, AT91_PMC_PCR, pmc_cache.pcr[i]);
+	}
+
+	for (i = 0; registered_pcks[i]; i++) {
+		u8 num = registered_pcks[i] - 1;
+		regmap_write(pmcreg, AT91_PMC_PCKR(num), pmc_cache.pckr[num]);
 	}
 
 	if (pmc_cache.uckr & AT91_PMC_UPLLEN)
