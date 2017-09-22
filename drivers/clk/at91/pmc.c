@@ -21,6 +21,8 @@
 
 #include "pmc.h"
 
+#define PMC_MAX_PCKS 8
+
 int of_at91_get_clk_range(struct device_node *np, const char *propname,
 			  struct clk_range *range)
 {
@@ -47,6 +49,8 @@ EXPORT_SYMBOL_GPL(of_at91_get_clk_range);
 #ifdef CONFIG_PM
 static struct regmap *pmcreg;
 
+static u8 registered_pcks[PMC_MAX_PCKS];
+
 static struct
 {
 	u32 scsr;
@@ -60,7 +64,23 @@ static struct
 	u32 imr;
 	u32 pcsr1;
 	u32 pcr[64];
+	u32 pckr[PMC_MAX_PCKS];
 } pmc_cache;
+
+/* Programmable Clock 0 is valid */
+void pmc_register_pck(u8 pck)
+{
+	int i;
+
+	for (i = 0; i < PMC_MAX_PCKS; i++) {
+		if (registered_pcks[i] == 0) {
+			registered_pcks[i] = pck + 1;
+			break;
+		}
+		if (registered_pcks[i] == (pck + 1))
+			break;
+	}
+}
 
 static int pmc_suspend(void)
 {
@@ -82,13 +102,29 @@ static int pmc_suspend(void)
 		regmap_read(pmcreg, AT91_PMC_PCR, &pmc_cache.pcr[i]);
 	}
 
+	for (i = 0; registered_pcks[i]; i++) {
+		u8 num = registered_pcks[i] - 1;
+
+		regmap_read(pmcreg, AT91_PMC_PCKR(num), &pmc_cache.pckr[num]);
+	}
+
 	return 0;
+}
+
+static bool pmc_ready(unsigned int mask)
+{
+	unsigned int status;
+
+	regmap_read(pmcreg, AT91_PMC_SR, &status);
+
+	return ((status & mask) == mask) ? 1 : 0;
 }
 
 static void pmc_resume(void)
 {
-	int i, ret = 0;
+	int i;
 	u32 tmp;
+	u32 mask = AT91_PMC_MCKRDY | AT91_PMC_LOCKA;
 
 	regmap_read(pmcreg, AT91_PMC_MCKR, &tmp);
 	if (pmc_cache.mckr != tmp)
@@ -111,11 +147,16 @@ static void pmc_resume(void)
 		regmap_write(pmcreg, AT91_PMC_PCR, pmc_cache.pcr[i]);
 	}
 
-	if (pmc_cache.uckr & AT91_PMC_UPLLEN) {
-		regmap_read(pmcreg, AT91_PMC_SR, &tmp);
-		if (!(tmp & AT91_PMC_LOCKU))
-			pr_warn("USB PLL not locked yet. It may lead to unpredictable behaviors for peripherals using it\n");
+	for (i = 0; registered_pcks[i]; i++) {
+		u8 num = registered_pcks[i] - 1;
+		regmap_write(pmcreg, AT91_PMC_PCKR(num), pmc_cache.pckr[num]);
 	}
+
+	if (pmc_cache.uckr & AT91_PMC_UPLLEN)
+		mask |= AT91_PMC_LOCKU;
+
+	while (!pmc_ready(mask))
+		cpu_relax();
 }
 
 static struct syscore_ops pmc_syscore_ops = {
