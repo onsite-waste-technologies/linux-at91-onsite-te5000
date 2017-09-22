@@ -112,9 +112,9 @@ static void pmc_resume(void)
 	}
 
 	if (pmc_cache.uckr & AT91_PMC_UPLLEN) {
-		regmap_read(pmcreg, AT91_PMC_SR, &tmp);
-		if (!(tmp & AT91_PMC_LOCKU))
-			pr_warn("USB PLL not locked yet. It may lead to unpredictable behaviors for peripherals using it\n");
+		ret = regmap_read_poll_timeout(pmcreg, AT91_PMC_SR, tmp, !(tmp & AT91_PMC_LOCKU), 10, 5000);
+		if (ret)
+			pr_crit("USB PLL didn't lock when resuming\n");
 	}
 }
 
