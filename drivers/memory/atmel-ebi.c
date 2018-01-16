@@ -442,6 +442,34 @@ static int sama5d3_ebi_init(struct at91_ebi *ebi)
 	return PTR_ERR_OR_ZERO(fields->mode);
 }
 
+static int sama5d2_ebi_init(struct at91_ebi *ebi)
+{
+	struct at91sam9_smc_generic_fields *fields = &ebi->sam9;
+	struct reg_field field = REG_FIELD(0, 0, 31);
+
+	field.id_size = fls(ebi->caps->available_cs);
+	field.id_offset = SAMA5_SMC_GENERIC_BLK_SZ;
+
+	field.reg = AT91SAM9_SMC_SETUP(SAMA5D2_SMC_GENERIC);
+	fields->setup = devm_regmap_field_alloc(ebi->dev, ebi->smc, field);
+	if (IS_ERR(fields->setup))
+		return PTR_ERR(fields->setup);
+
+	field.reg = AT91SAM9_SMC_PULSE(SAMA5D2_SMC_GENERIC);
+	fields->pulse = devm_regmap_field_alloc(ebi->dev, ebi->smc, field);
+	if (IS_ERR(fields->pulse))
+		return PTR_ERR(fields->pulse);
+
+	field.reg = AT91SAM9_SMC_CYCLE(SAMA5D2_SMC_GENERIC);
+	fields->cycle = devm_regmap_field_alloc(ebi->dev, ebi->smc, field);
+	if (IS_ERR(fields->cycle))
+		return PTR_ERR(fields->cycle);
+
+	field.reg = SAMA5_SMC_MODE(SAMA5D2_SMC_GENERIC);
+	fields->mode = devm_regmap_field_alloc(ebi->dev, ebi->smc, field);
+	return PTR_ERR_OR_ZERO(fields->mode);
+}
+
 static int at91_ebi_dev_setup(struct at91_ebi *ebi, struct device_node *np,
 			      int reg_cells)
 {
@@ -608,6 +636,14 @@ static const struct at91_ebi_caps sama5d3_ebi_caps = {
 	.init = sama5d3_ebi_init,
 };
 
+static const struct at91_ebi_caps sama5d2_ebi_caps = {
+	.available_cs = 0xf,
+	.get_config = at91sam9_ebi_get_config,
+	.xlate_config = at91sam9_ebi_xslate_config,
+	.apply_config = at91sam9_ebi_apply_config,
+	.init = sama5d2_ebi_init,
+};
+
 static const struct of_device_id at91_ebi_id_table[] = {
 	{
 		.compatible = "atmel,at91sam9260-ebi",
@@ -640,6 +676,10 @@ static const struct of_device_id at91_ebi_id_table[] = {
 	{
 		.compatible = "atmel,sama5d3-ebi",
 		.data = &sama5d3_ebi_caps,
+	},
+	{
+		.compatible = "atmel,sama5d2-ebi",
+		.data = &sama5d2_ebi_caps,
 	},
 	{ /* sentinel */ }
 };
