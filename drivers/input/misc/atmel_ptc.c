@@ -100,7 +100,6 @@ struct atmel_qtm_mailbox_map {
 	unsigned int	cmd_id_offset;
 	unsigned int	cmd_addr_offset;
 	unsigned int	cmd_data_offset;
-	unsigned int	config_offset;
 	unsigned int	node_group_config_offset;
 	unsigned int	node_group_config_count_offset;
 	unsigned int	node_config_offset;
@@ -129,22 +128,21 @@ static struct atmel_qtm_mailbox_map mailbox_map_v63 = {
 	.cmd_id_offset				= 0,
 	.cmd_addr_offset			= 2,
 	.cmd_data_offset			= 4,
-	.config_offset				= 0x100,
-	.node_group_config_offset		= 0x0,
+	.node_group_config_offset		= 0x100,
 	.node_group_config_count_offset		= 0,
 	.node_config_offset			= 0x106,
 	.node_config_size			= 12,
 	.node_config_mask_x_offset		= 0,
 	.node_config_mask_y_offset		= 2,
-	.scroller_group_config_offset		= 0x716,
+	.scroller_group_config_offset		= 0x816,
 	.scroller_group_config_count_offset	= 2,
-	.scroller_config_offset			= 0x71a,
+	.scroller_config_offset			= 0x81a,
 	.scroller_config_size			= 10,
 	.scroller_config_type_offset		= 0,
 	.scroller_config_key_start_offset	= 2,
 	.scroller_config_key_count_offset	= 4,
 	.scroller_config_resol_deadband_offset	= 5,
-	.scroller_data_offset			= 0x742,
+	.scroller_data_offset			= 0x842,
 	.scroller_data_size			= 10,
 	.scroller_data_status_offset		= 0,
 	.scroller_data_position_offset		= 6,
@@ -272,7 +270,7 @@ static u16 atmel_qtm_get_node_mask_x(struct atmel_ptc *ptc,
 				     unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
+			+ ptc->mb_map->node_config_offset
 			+ ptc->mb_map->node_config_size * index
 			+ ptc->mb_map->node_config_mask_x_offset;
 
@@ -283,7 +281,6 @@ static u32 atmel_qtm_get_node_mask_y(struct atmel_ptc *ptc,
 					      unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->node_config_offset
 			+ ptc->mb_map->node_config_size * index
 			+ ptc->mb_map->node_config_mask_y_offset;
@@ -294,7 +291,6 @@ static u32 atmel_qtm_get_node_mask_y(struct atmel_ptc *ptc,
 static u16 atmel_qtm_get_key_count(struct atmel_ptc *ptc)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->node_group_config_offset
 			+ ptc->mb_map->node_group_config_count_offset;
 
@@ -304,7 +300,6 @@ static u16 atmel_qtm_get_key_count(struct atmel_ptc *ptc)
 static u8 atmel_qtm_get_scroller_group_config_count(struct atmel_ptc *ptc)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->scroller_group_config_offset
 			+ ptc->mb_map->scroller_group_config_count_offset;
 
@@ -315,7 +310,6 @@ static u8 atmel_qtm_get_scroller_type(struct atmel_ptc *ptc,
 				      unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->scroller_config_offset
 			+ ptc->mb_map->scroller_config_size * index
 			+ ptc->mb_map->scroller_config_type_offset;
@@ -327,7 +321,6 @@ static u16 atmel_qtm_get_scroller_key_start(struct atmel_ptc *ptc,
 					    unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->scroller_config_offset
 			+ ptc->mb_map->scroller_config_size * index
 			+ ptc->mb_map->scroller_config_key_start_offset;
@@ -339,7 +332,6 @@ static u8 atmel_qtm_get_scroller_key_count(struct atmel_ptc *ptc,
 					   unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->scroller_config_offset
 			+ ptc->mb_map->scroller_config_size * index
 			+ ptc->mb_map->scroller_config_key_count_offset;
@@ -351,7 +343,6 @@ static u8 atmel_qtm_get_scroller_resolution(struct atmel_ptc *ptc,
 					    unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->scroller_config_offset
 			+ ptc->mb_map->scroller_config_size * index
 			+ ptc->mb_map->scroller_config_resol_deadband_offset;
@@ -363,7 +354,6 @@ static u8 atmel_qtm_get_scroller_status(struct atmel_ptc *ptc,
 					unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->scroller_data_offset
 			+ ptc->mb_map->scroller_data_size * index
 			+ ptc->mb_map->scroller_data_status_offset;
@@ -375,7 +365,6 @@ static u16 atmel_qtm_get_scroller_position(struct atmel_ptc *ptc,
 					   unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->scroller_data_offset
 			+ ptc->mb_map->scroller_data_size * index
 			+ ptc->mb_map->scroller_data_position_offset;
@@ -525,7 +514,7 @@ static int atmel_ptc_request_pins(struct atmel_ptc *ptc)
 		u16 mask_x = atmel_qtm_get_node_mask_x(ptc, i);
 		u32 mask_y = atmel_qtm_get_node_mask_y(ptc, i);
 
-		for_each_set_bit(j, (unsigned long *)&mask_x, sizeof(mask_x)) {
+		for_each_set_bit(j, (unsigned long *)&mask_x, 16) {
 			if (ptc->x_lines_requested[j])
 				continue;
 
@@ -536,7 +525,7 @@ static int atmel_ptc_request_pins(struct atmel_ptc *ptc)
 			ptc->x_lines_requested[j] = true;
 		}
 
-		for_each_set_bit(j, (unsigned long *)&mask_y, sizeof(mask_y)) {
+		for_each_set_bit(j, (unsigned long *)&mask_y, 32) {
 			if (ptc->y_lines_requested[j])
 				continue;
 
