@@ -84,13 +84,22 @@ static char *firmware_file = ATMEL_PPP_FIRMWARE_NAME;
 static char *configuration_file = ATMEL_QTM_CONF_NAME;
 static bool debug_mode;
 
+struct atmel_qtm_conf_header {
+	u8	header_version_major;
+	u8	header_version_minor;
+	u32	header_size;
+	char	*firmware_version;
+	char	*tool_version;
+	char	*date;
+	char	*description;
+};
+
 /* Depends on firmware version */
 struct atmel_qtm_mailbox_map {
 	unsigned int	cmd_offset;
 	unsigned int	cmd_id_offset;
 	unsigned int	cmd_addr_offset;
 	unsigned int	cmd_data_offset;
-	unsigned int	config_offset;
 	unsigned int	node_group_config_offset;
 	unsigned int	node_group_config_count_offset;
 	unsigned int	node_config_offset;
@@ -114,27 +123,26 @@ struct atmel_qtm_mailbox_map {
 	unsigned int	touch_events_scroller_event_id;
 };
 
-static struct atmel_qtm_mailbox_map mailbox_map_v61 = {
+static struct atmel_qtm_mailbox_map mailbox_map_v63 = {
 	.cmd_offset				= 0x0,
 	.cmd_id_offset				= 0,
 	.cmd_addr_offset			= 2,
 	.cmd_data_offset			= 4,
-	.config_offset				= 0x100,
-	.node_group_config_offset		= 0x0,
+	.node_group_config_offset		= 0x100,
 	.node_group_config_count_offset		= 0,
 	.node_config_offset			= 0x106,
 	.node_config_size			= 12,
 	.node_config_mask_x_offset		= 0,
 	.node_config_mask_y_offset		= 2,
-	.scroller_group_config_offset		= 0x716,
+	.scroller_group_config_offset		= 0x816,
 	.scroller_group_config_count_offset	= 2,
-	.scroller_config_offset			= 0x71a,
+	.scroller_config_offset			= 0x81a,
 	.scroller_config_size			= 10,
 	.scroller_config_type_offset		= 0,
 	.scroller_config_key_start_offset	= 2,
 	.scroller_config_key_count_offset	= 4,
 	.scroller_config_resol_deadband_offset	= 5,
-	.scroller_data_offset			= 0x742,
+	.scroller_data_offset			= 0x842,
 	.scroller_data_size			= 10,
 	.scroller_data_status_offset		= 0,
 	.scroller_data_position_offset		= 6,
@@ -169,6 +177,7 @@ struct atmel_ptc {
 	struct device			*dev;
 	struct input_dev		*buttons_input;
 	struct input_dev		*scroller_input[ATMEL_PTC_MAX_SCROLLERS];
+	struct atmel_qtm_conf_header	conf;
 	struct atmel_qtm_mailbox_map	*mb_map;
 	const struct atmel_ptc_pins	*pins;
 	bool				*x_lines_requested;
@@ -182,7 +191,7 @@ struct atmel_ptc {
 	u32				button_event[ATMEL_PTC_MAX_NODES / 32];
 	u32				button_state[ATMEL_PTC_MAX_NODES / 32];
 	u32				scroller_event;
-	u32				firmware_version;
+	char				*firmware_version;
 };
 
 static void atmel_ppp_irq_enable(struct atmel_ptc *ptc, u8 mask)
@@ -261,7 +270,7 @@ static u16 atmel_qtm_get_node_mask_x(struct atmel_ptc *ptc,
 				     unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
+			+ ptc->mb_map->node_config_offset
 			+ ptc->mb_map->node_config_size * index
 			+ ptc->mb_map->node_config_mask_x_offset;
 
@@ -272,7 +281,6 @@ static u32 atmel_qtm_get_node_mask_y(struct atmel_ptc *ptc,
 					      unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->node_config_offset
 			+ ptc->mb_map->node_config_size * index
 			+ ptc->mb_map->node_config_mask_y_offset;
@@ -283,7 +291,6 @@ static u32 atmel_qtm_get_node_mask_y(struct atmel_ptc *ptc,
 static u16 atmel_qtm_get_key_count(struct atmel_ptc *ptc)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->node_group_config_offset
 			+ ptc->mb_map->node_group_config_count_offset;
 
@@ -293,7 +300,6 @@ static u16 atmel_qtm_get_key_count(struct atmel_ptc *ptc)
 static u8 atmel_qtm_get_scroller_group_config_count(struct atmel_ptc *ptc)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->scroller_group_config_offset
 			+ ptc->mb_map->scroller_group_config_count_offset;
 
@@ -304,7 +310,6 @@ static u8 atmel_qtm_get_scroller_type(struct atmel_ptc *ptc,
 				      unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->scroller_config_offset
 			+ ptc->mb_map->scroller_config_size * index
 			+ ptc->mb_map->scroller_config_type_offset;
@@ -316,7 +321,6 @@ static u16 atmel_qtm_get_scroller_key_start(struct atmel_ptc *ptc,
 					    unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->scroller_config_offset
 			+ ptc->mb_map->scroller_config_size * index
 			+ ptc->mb_map->scroller_config_key_start_offset;
@@ -328,7 +332,6 @@ static u8 atmel_qtm_get_scroller_key_count(struct atmel_ptc *ptc,
 					   unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->scroller_config_offset
 			+ ptc->mb_map->scroller_config_size * index
 			+ ptc->mb_map->scroller_config_key_count_offset;
@@ -340,7 +343,6 @@ static u8 atmel_qtm_get_scroller_resolution(struct atmel_ptc *ptc,
 					    unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->scroller_config_offset
 			+ ptc->mb_map->scroller_config_size * index
 			+ ptc->mb_map->scroller_config_resol_deadband_offset;
@@ -352,7 +354,6 @@ static u8 atmel_qtm_get_scroller_status(struct atmel_ptc *ptc,
 					unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->scroller_data_offset
 			+ ptc->mb_map->scroller_data_size * index
 			+ ptc->mb_map->scroller_data_status_offset;
@@ -364,7 +365,6 @@ static u16 atmel_qtm_get_scroller_position(struct atmel_ptc *ptc,
 					   unsigned int index)
 {
 	void __iomem *addr = ptc->qtm_mb
-			+ ptc->mb_map->config_offset
 			+ ptc->mb_map->scroller_data_offset
 			+ ptc->mb_map->scroller_data_size * index
 			+ ptc->mb_map->scroller_data_position_offset;
@@ -514,7 +514,7 @@ static int atmel_ptc_request_pins(struct atmel_ptc *ptc)
 		u16 mask_x = atmel_qtm_get_node_mask_x(ptc, i);
 		u32 mask_y = atmel_qtm_get_node_mask_y(ptc, i);
 
-		for_each_set_bit(j, (unsigned long *)&mask_x, sizeof(mask_x)) {
+		for_each_set_bit(j, (unsigned long *)&mask_x, 16) {
 			if (ptc->x_lines_requested[j])
 				continue;
 
@@ -525,7 +525,7 @@ static int atmel_ptc_request_pins(struct atmel_ptc *ptc)
 			ptc->x_lines_requested[j] = true;
 		}
 
-		for_each_set_bit(j, (unsigned long *)&mask_y, sizeof(mask_y)) {
+		for_each_set_bit(j, (unsigned long *)&mask_y, 32) {
 			if (ptc->y_lines_requested[j])
 				continue;
 
@@ -738,6 +738,34 @@ static int atmel_ptc_conf_load(struct atmel_ptc *ptc)
 		return ret;
 	}
 
+	ptc->conf.header_version_major = conf->data[0];
+	ptc->conf.header_version_minor = conf->data[1];
+	switch (ptc->conf.header_version_major) {
+	case (1):
+		ptc->conf.header_size = 96;
+		ptc->conf.firmware_version = (char *) conf->data + 16;
+		ptc->conf.tool_version = (char *) conf->data + 32;
+		ptc->conf.date = (char *) conf->data + 48;
+		ptc->conf.description = (char *) conf->data + 64;
+		break;
+	default:
+		release_firmware(conf);
+		dev_err(ptc->dev, "Unsupported header version: %u.%u\n",
+			ptc->conf.header_version_major,
+			ptc->conf.header_version_minor);
+		return -EINVAL;
+	};
+
+	dev_info(ptc->dev, "firmware version: %s, tool version: %s\n",
+		 ptc->conf.firmware_version, ptc->conf.tool_version);
+	dev_info(ptc->dev, "date: %s, description: %s\n",
+		 ptc->conf.date, ptc->conf.description);
+
+	/*
+	 * TODO: check the version of the firmware loaded vs the version of the
+	 * firmware needed by the configuration file.
+	 */
+
 	atmel_ppp_irq_enable(ptc, ATMEL_PPP_IRQ1);
 	atmel_ppp_irq_disable(ptc, ATMEL_PPP_IRQ2 | ATMEL_PPP_IRQ3);
 
@@ -746,7 +774,8 @@ static int atmel_ptc_conf_load(struct atmel_ptc *ptc)
 
 	dst = (char *)ptc->qtm_mb;
 	/* Need to use _memcpy_toio, otherwise configuration is not well loaded. */
-	_memcpy_toio(dst, conf->data + 64, conf->size - 64); /* Header size, cleanup needed. */
+	_memcpy_toio(dst, conf->data + ptc->conf.header_size,
+		     conf->size - ptc->conf.header_size);
 
 	key_count = atmel_qtm_get_key_count(ptc);
 
@@ -771,7 +800,6 @@ static int atmel_ptc_conf_load(struct atmel_ptc *ptc)
 static int atmel_ptc_fw_load(struct atmel_ptc *ptc)
 {
 	const struct firmware *fw;
-	struct atmel_qtm_cmd cmd;
 	int ret;
 
 	dev_dbg(ptc->dev, "loading firmware: %s\n", firmware_file);
@@ -781,16 +809,13 @@ static int atmel_ptc_fw_load(struct atmel_ptc *ptc)
 		return ret;
 	}
 
-	/* TODO */
-	ptc->firmware_version = 61;
-	dev_dbg(ptc->dev, "firmware version: %u\n", ptc->firmware_version);
+	/* TODO: ptc->firmware_version = */
+	ptc->firmware_version = "PPP_VER_6.3";
 
-	switch (ptc->firmware_version) {
-	case 61:
-		ptc->mb_map = &mailbox_map_v61;
-		break;
-	default:
-		dev_err(ptc->dev, "unsupported firmware version: %u\n", ptc->firmware_version);
+	if (!strcmp(ptc->firmware_version, "PPP_VER_6.3")) {
+		ptc->mb_map = &mailbox_map_v63;
+	} else {
+		dev_err(ptc->dev, "unsupported firmware version: %s\n", ptc->firmware_version);
 		ret = -EINVAL;
 		goto out;
 	}
@@ -807,13 +832,6 @@ static int atmel_ptc_fw_load(struct atmel_ptc *ptc)
 	memcpy(ptc->firmware, fw->data, fw->size);
 
 	atmel_ppp_cmd_send(ptc, ATMEL_PPP_CMD_RUN);
-
-	cmd.id = ATMEL_QTM_CMD_FIRM_VERSION;
-	atmel_ptc_cmd_send(ptc, &cmd);
-	if (cmd.data != ptc->firmware_version) {
-		dev_err(ptc->dev, "invalid firmware\n");
-		ret = -EINVAL;
-	}
 
 out:
 	release_firmware(fw);
