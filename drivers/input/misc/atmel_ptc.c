@@ -32,7 +32,8 @@
 #define ATMEL_PTC_KEYCODE_BASE_OFFSET	0x100
 
 /* ----- PPP ----- */
-#define ATMEL_PPP_FIRMWARE_NAME	"atmel_ptc.bin"
+#define ATMEL_PPP_FW_NAME		"atmel_ptc.bin"
+#define ATMEL_PPP_FW_FOOTER_SIZE	16
 
 #define ATMEL_PPP_CONFIG	0x20
 #define ATMEL_PPP_CTRL		0x24
@@ -80,7 +81,7 @@
 #define	ATMEL_QTM_SCROLLER_TYPE_SLIDER		0x0
 #define	ATMEL_QTM_SCROLLER_TYPE_WHEEL		0x1
 
-static char *firmware_file = ATMEL_PPP_FIRMWARE_NAME;
+static char *firmware_file = ATMEL_PPP_FW_NAME;
 static char *configuration_file = ATMEL_QTM_CONF_NAME;
 static bool debug_mode;
 
@@ -88,7 +89,7 @@ struct atmel_qtm_conf_header {
 	u8	header_version_major;
 	u8	header_version_minor;
 	u32	header_size;
-	char	*firmware_version;
+	char	*fw_version;
 	char	*tool_version;
 	char	*date;
 	char	*description;
@@ -123,7 +124,7 @@ struct atmel_qtm_mailbox_map {
 	unsigned int	touch_events_scroller_event_id;
 };
 
-static struct atmel_qtm_mailbox_map mailbox_map_v63 = {
+static struct atmel_qtm_mailbox_map mailbox_map_v64 = {
 	.cmd_offset				= 0x0,
 	.cmd_id_offset				= 0,
 	.cmd_addr_offset			= 2,
@@ -191,7 +192,7 @@ struct atmel_ptc {
 	u32				button_event[ATMEL_PTC_MAX_NODES / 32];
 	u32				button_state[ATMEL_PTC_MAX_NODES / 32];
 	u32				scroller_event;
-	char				*firmware_version;
+	char				fw_version[ATMEL_PPP_FW_FOOTER_SIZE];
 };
 
 static void atmel_ppp_irq_enable(struct atmel_ptc *ptc, u8 mask)
@@ -743,7 +744,7 @@ static int atmel_ptc_conf_load(struct atmel_ptc *ptc)
 	switch (ptc->conf.header_version_major) {
 	case (1):
 		ptc->conf.header_size = 96;
-		ptc->conf.firmware_version = (char *) conf->data + 16;
+		ptc->conf.fw_version = (char *) conf->data + 16;
 		ptc->conf.tool_version = (char *) conf->data + 32;
 		ptc->conf.date = (char *) conf->data + 48;
 		ptc->conf.description = (char *) conf->data + 64;
@@ -757,7 +758,7 @@ static int atmel_ptc_conf_load(struct atmel_ptc *ptc)
 	};
 
 	dev_info(ptc->dev, "firmware version: %s, tool version: %s\n",
-		 ptc->conf.firmware_version, ptc->conf.tool_version);
+		 ptc->conf.fw_version, ptc->conf.tool_version);
 	dev_info(ptc->dev, "date: %s, description: %s\n",
 		 ptc->conf.date, ptc->conf.description);
 
@@ -765,6 +766,9 @@ static int atmel_ptc_conf_load(struct atmel_ptc *ptc)
 	 * TODO: check the version of the firmware loaded vs the version of the
 	 * firmware needed by the configuration file.
 	 */
+	if (strcmp(ptc->fw_version, ptc->conf.fw_version))
+		dev_warn(ptc->dev, "be careful the configuration requires firmware %s, current firmware is %s\n",
+			 ptc->conf.fw_version, ptc->fw_version);
 
 	atmel_ppp_irq_enable(ptc, ATMEL_PPP_IRQ1);
 	atmel_ppp_irq_disable(ptc, ATMEL_PPP_IRQ2 | ATMEL_PPP_IRQ3);
@@ -809,13 +813,14 @@ static int atmel_ptc_fw_load(struct atmel_ptc *ptc)
 		return ret;
 	}
 
-	/* TODO: ptc->firmware_version = */
-	ptc->firmware_version = "PPP_VER_6.3";
+	strncpy(ptc->fw_version, fw->data + fw->size - ATMEL_PPP_FW_FOOTER_SIZE,
+		ATMEL_PPP_FW_FOOTER_SIZE);
+	dev_dbg(ptc->dev, "version: %s\n", ptc->fw_version);
 
-	if (!strcmp(ptc->firmware_version, "PPP_VER_6.3")) {
-		ptc->mb_map = &mailbox_map_v63;
+	if (!strcmp(ptc->fw_version, "PPP_VER_006.004")) {
+		ptc->mb_map = &mailbox_map_v64;
 	} else {
-		dev_err(ptc->dev, "unsupported firmware version: %s\n", ptc->firmware_version);
+		dev_err(ptc->dev, "unsupported firmware version\n");
 		ret = -EINVAL;
 		goto out;
 	}
@@ -1085,5 +1090,5 @@ MODULE_PARM_DESC(debug_mode, "The debug mode provides an interface to the mailbo
 MODULE_AUTHOR("Ludovic Desroches <ludovic.desroches@microchip.com>");
 MODULE_DESCRIPTION("Atmel PTC subsystem");
 MODULE_LICENSE("GPL v2");
-MODULE_FIRMWARE(ATMEL_PPP_FIRMWARE_NAME);
+MODULE_FIRMWARE(ATMEL_PPP_FW_NAME);
 MODULE_FIRMWARE(ATMEL_QTM_CONF_NAME);
