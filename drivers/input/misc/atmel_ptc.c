@@ -796,6 +796,12 @@ static int atmel_ptc_conf_load(struct atmel_ptc *ptc)
 	cmd.data = key_count;
 	atmel_ptc_cmd_send(ptc, &cmd);
 
+	cmd.id = ATMEL_QTM_CMD_FIRM_VERSION;
+	cmd.data = 0;
+	atmel_ptc_cmd_send(ptc, &cmd);
+	dev_dbg(ptc->dev, "firmware version: v%u.%u\n",
+		(cmd.data >> 16) & 0xffff, cmd.data & 0xffff);
+
 	release_firmware(conf);
 
 	return ret;
