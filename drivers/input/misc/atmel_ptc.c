@@ -186,12 +186,14 @@ struct atmel_ptc {
 	int				irq;
 	u8				imr;
 	struct completion		ppp_ack;
+	struct tasklet_struct		tasklet;
 	unsigned int			button_keycode[ATMEL_PTC_MAX_NODES];
 	bool				buttons_registered;
 	bool				scroller_registered[ATMEL_PTC_MAX_SCROLLERS];
 	u32				button_event[ATMEL_PTC_MAX_NODES / 32];
 	u32				button_state[ATMEL_PTC_MAX_NODES / 32];
 	u32				scroller_event;
+	bool				scroller_tracking;
 	char				fw_version[ATMEL_PPP_FW_FOOTER_SIZE];
 };
 
@@ -403,29 +405,29 @@ static u32 atmel_qtm_get_touch_events_scroller_event_id(struct atmel_ptc *ptc)
 
 static void atmel_ptc_irq_scroller_event(struct atmel_ptc *ptc)
 {
-	unsigned long i;
+	unsigned int status, i;
 
-	if (!ptc->scroller_event)
+	if (!ptc->scroller_event || ptc->scroller_tracking)
 		return;
 
-	for_each_set_bit(i, (unsigned long *)&ptc->scroller_event, ATMEL_PTC_MAX_SCROLLERS) {
-		unsigned int scroller_type =
-			atmel_qtm_get_scroller_type(ptc, i);
-		unsigned int position =
-			atmel_qtm_get_scroller_position(ptc, i);
-		unsigned int status =
-			atmel_qtm_get_scroller_status(ptc, i);
+	/*
+	 * Report the touch event and let the tasklet tracking the position
+	 * until the scrollers are no longer touched.
+	 */
+	for (i = 0 ; i < ATMEL_PTC_MAX_SCROLLERS; i++) {
+		if (!ptc->scroller_input[i])
+			break;
 
-		if (scroller_type == ATMEL_QTM_SCROLLER_TYPE_WHEEL)
-			input_report_abs(ptc->scroller_input[i],
-					 ABS_WHEEL, position);
-		else
-			input_report_abs(ptc->scroller_input[i],
-					 ABS_X, position);
+		status = atmel_qtm_get_scroller_status(ptc, i);
 
 		input_report_key(ptc->scroller_input[i], BTN_TOUCH,
 				 status & 0x1);
 		input_sync(ptc->scroller_input[i]);
+
+		if (status & 0x1) {
+			ptc->scroller_tracking = true;
+			tasklet_schedule(&ptc->tasklet);
+		}
 	}
 }
 
@@ -722,6 +724,37 @@ static int atmel_ptc_cmd_send(struct atmel_ptc *ptc, struct atmel_qtm_cmd *cmd)
 
 	cmd->data = atmel_qtm_get_cmd_data(ptc);
 	return 0;
+}
+
+static void atmel_ptc_tasklet(unsigned long priv)
+{
+	struct atmel_ptc *ptc = (struct atmel_ptc *)priv;
+	unsigned int scroller_type, position, status, i;
+
+	for (i = 0 ; i < ATMEL_PTC_MAX_SCROLLERS; i++) {
+		if (!ptc->scroller_input[i])
+			break;
+
+		scroller_type = atmel_qtm_get_scroller_type(ptc, i);
+		position = atmel_qtm_get_scroller_position(ptc, i);
+		status = atmel_qtm_get_scroller_status(ptc, i);
+
+		if (status & 0x1) {
+			if (scroller_type == ATMEL_QTM_SCROLLER_TYPE_WHEEL)
+				input_report_abs(ptc->scroller_input[i],
+						 ABS_WHEEL, position);
+			else
+				input_report_abs(ptc->scroller_input[i],
+						 ABS_X, position);
+			input_sync(ptc->scroller_input[i]);
+			tasklet_schedule(&ptc->tasklet);
+		} else {
+			input_report_key(ptc->scroller_input[i], BTN_TOUCH, 0);
+			input_sync(ptc->scroller_input[i]);
+
+			ptc->scroller_tracking = false;
+		}
+	}
 }
 
 static int atmel_ptc_conf_load(struct atmel_ptc *ptc)
@@ -1024,6 +1057,8 @@ static int atmel_ptc_probe(struct platform_device *pdev)
 	if (debug_mode)
 		ret = sysfs_create_group(&ptc->dev->kobj, &atmel_ptc_qtm_mb_attr_group);
 
+	tasklet_init(&ptc->tasklet, atmel_ptc_tasklet, (unsigned long)ptc);
+
 	return ret;
 }
 
@@ -1031,6 +1066,7 @@ static int atmel_ptc_remove(struct platform_device *pdev)
 {
 	struct atmel_ptc *ptc = platform_get_drvdata(pdev);
 
+	tasklet_kill(&ptc->tasklet);
 	atmel_ptc_unregister_input_devices(ptc);
 	atmel_ptc_free_pins(ptc);
 
