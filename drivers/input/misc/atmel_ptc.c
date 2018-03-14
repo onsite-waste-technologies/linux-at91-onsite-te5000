@@ -32,7 +32,7 @@
 #define ATMEL_PTC_KEYCODE_BASE_OFFSET	0x100
 
 /* ----- PPP ----- */
-#define ATMEL_PPP_FW_NAME		"atmel_ptc.bin"
+#define ATMEL_PPP_FW_NAME		"microchip/ptc_fw.bin"
 #define ATMEL_PPP_FW_FOOTER_SIZE	16
 
 #define ATMEL_PPP_CONFIG	0x20
@@ -68,7 +68,7 @@
 #define atmel_ppp_writel(ptc, reg, val)	writel_relaxed(val, (ptc)->ppp_regs + (reg))
 
 /* ----- QTM ----- */
-#define ATMEL_QTM_CONF_NAME		"atmel_ptc.conf"
+#define ATMEL_QTM_CONF_NAME		"microchip/ptc_cfg.bin"
 
 #define ATMEL_QTM_MB_OFFSET			0x4000
 #define ATMEL_QTM_MB_SIZE			0x1000
