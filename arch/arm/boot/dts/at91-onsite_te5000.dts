@@ -1,0 +1,367 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * at91-onsite_te5000.dts - Device Tree file for OnSite TE5000 board
+ *
+ *  Copyright (c) 2017, Microchip Technology Inc.
+ *                2016 Nicolas Ferre <nicolas.ferre@atmel.com>
+ *                2017 Cristian Birsan <cristian.birsan@microchip.com>
+ *                2017 Claudiu Beznea <claudiu.beznea@microchip.com>
+ *                2020 Dennis Lambe Jr. <dlambe@innovative-electronics.com>
+ */
+/dts-v1/;
+#include "at91-sama5d27_som1.dtsi"
+#include <dt-bindings/mfd/atmel-flexcom.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/at91.h>
+#include <dt-bindings/input/linux-event-codes.h>
+#include <dt-bindings/pwm/pwm.h>
+
+/ {
+	model = "OnSite TE5000";
+	compatible = "atmel,onsite-te5000", "atmel,sama5d27-som1", "atmel,sama5d27", "atmel,sama5d2", "atmel,sama5";
+
+	aliases {
+		serial0 = &uart1;	/* DBGU */
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	ahb {
+		usb0: gadget@300000 {
+			atmel,vbus-gpio = <&pioA PIN_PD20 GPIO_ACTIVE_HIGH>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_usba_vbus>;
+			status = "okay";
+		};
+
+		usb1: ohci@400000 {
+			num-ports = <3>;
+			/* Commented out because of conflict with input buttons */
+			/* atmel,vbus-gpio = <0 /\* &pioA PIN_PD20 GPIO_ACTIVE_HIGH *\/ */
+			/* 		   &pioA PIN_PA27 GPIO_ACTIVE_HIGH */
+			/* 		   0 */
+			/* 		  >; */
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_usb_default>;
+			status = "okay";
+		};
+
+		usb2: ehci@500000 {
+			status = "okay";
+		};
+
+		sdmmc0: sdio-host@a0000000 {
+			bus-width = <4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_sdmmc0_default>;
+			non-removable;
+			disable-wp;
+			no-1-8-v;
+			status = "okay";
+		};
+
+		apb {
+			macb0: ethernet@f8008000 {
+				status = "okay";
+			};
+
+			tcb0: timer@f800c000 {
+				timer0: timer@0 {
+					compatible = "atmel,tcb-timer";
+					reg = <0>;
+				};
+
+				timer1: timer@1 {
+					compatible = "atmel,tcb-timer";
+					reg = <1>;
+				};
+			};
+
+			uart1: serial@f8020000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_uart1_default>;
+				atmel,use-dma-rx;
+				atmel,use-dma-tx;
+				status = "okay";
+			};
+
+			pwm0: pwm@f802c000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_pwm0_default>;
+				status = "okay";
+			};
+
+			shdwc@f8048010 {
+				atmel,shdwc-debouncer = <976>;
+				atmel,wakeup-rtc-timer;
+
+				input@0 {
+					reg = <0>;
+					atmel,wakeup-type = "low";
+				};
+			};
+
+			watchdog@f8048040 {
+				status = "okay";
+			};
+
+			flx3: flexcom@fc014000 {
+				atmel,flexcom-mode = <ATMEL_FLEXCOM_MODE_SPI>;
+				status = "disabled";
+
+				uart7: serial@200 {
+					compatible = "atmel,at91sam9260-usart";
+					reg = <0x200 0x200>;
+					interrupts = <22 IRQ_TYPE_LEVEL_HIGH 7>;
+					clocks = <&pmc PMC_TYPE_PERIPHERAL 22>;
+					clock-names = "usart";
+					pinctrl-names = "default";
+					pinctrl-0 = <&pinctrl_flx3_default>;
+					atmel,fifo-size = <32>;
+					status = "disabled"; /* Conflict with isc. */
+				};
+			};
+
+			adc: adc@fc030000 {
+				vddana-supply = <&vddana>;
+				vref-supply = <&advref>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_an_default>;
+				status = "okay";
+			};
+
+			pinctrl@fc038000 {
+				pinctrl_flx3_default: flx3_default {
+					pinmux = <PIN_PC20__FLEXCOM3_IO0>,
+						 <PIN_PC19__FLEXCOM3_IO1>,
+						 <PIN_PC21__FLEXCOM3_IO3>,
+						 <PIN_PC22__FLEXCOM3_IO4>;
+					bias-disable;
+				};
+
+				pinctrl_an_default: an_default {
+					pinmux = <PIN_PD23__GPIO>,
+						 <PIN_PD24__GPIO>;
+					bias-disable;
+				};
+
+				pinctrl_key_gpio_default: key_gpio_default {
+					pinmux = <PIN_PB26__GPIO>,
+						 <PIN_PB27__GPIO>,
+						 <PIN_PB28__GPIO>;
+					bias-pull-up;
+				};
+
+				pinctrl_lock_feedback_default: lock_feedback_default {
+					pinmux = <PIN_PB2__GPIO>;
+					bias-disable;
+				};
+
+				pinctrl_beeper_gpio_default: beeper_gpio_default {
+					pinmux = <PIN_PB29__GPIO>;
+					bias-pull-up;
+				};
+
+				pinctrl_backlight_gpio_default: backlight_gpio_default {
+					pinmux = <PIN_PA31__GPIO>;
+					output-high;
+				};
+
+				pinctrl_led_gpio_default: led_gpio_default {
+					pinmux = <PIN_PA10__GPIO>,
+						 <PIN_PB0__GPIO>;
+					bias-pull-up;
+				};
+
+				pinctrl_con_tach_default: con_tach_default {
+					pinmux = <PIN_PA27__GPIO>;
+					bias-pull-up;
+				};
+
+				pinctrl_chassis_tach_default: chassis_tach_default {
+					pinmux = <PIN_PB22__GPIO>;
+					bias-pull-up;
+				};
+
+				pinctrl_sdmmc0_default: sdmmc0_default {
+					cmd_data {
+						pinmux = <PIN_PA1__SDMMC0_CMD>,
+							 <PIN_PA2__SDMMC0_DAT0>,
+							 <PIN_PA3__SDMMC0_DAT1>,
+							 <PIN_PA4__SDMMC0_DAT2>,
+							 <PIN_PA5__SDMMC0_DAT3>;
+						bias-disable;
+					};
+
+					ck_cd_vddsel {
+						pinmux = <PIN_PA0__SDMMC0_CK>;
+						bias-disable;
+					};
+				};
+
+				pinctrl_uart1_default: uart1_default {
+					pinmux = <PIN_PD2__URXD1>,
+						 <PIN_PD3__UTXD1>;
+					bias-disable;
+				};
+
+				pinctrl_pwm0_default: pwm0_default {
+					pinmux = <PIN_PB1__PWML1>,
+						 <PIN_PB6__PWML2>,
+						 <PIN_PB8__PWML3>;
+					bias-disable;
+				};
+
+				pinctrl_usb_default: usb_default {
+					pinmux = <PIN_PD19__GPIO>;
+					bias-disable;
+				};
+
+				pinctrl_usba_vbus: usba_vbus {
+					pinmux = <PIN_PD20__GPIO>;
+					bias-disable;
+				};
+			};
+		};
+	};
+
+	panel_buttons {
+		compatible = "gpio-keys";
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_key_gpio_default>;
+
+		btn0 {
+			label = "BTN0";
+			gpios = <&pioA PIN_PB26 GPIO_ACTIVE_LOW>;
+			linux,code = <BTN_0>;
+			wakeup-source;
+		};
+		btn1 {
+			label = "BTN1";
+			gpios = <&pioA PIN_PB27 GPIO_ACTIVE_LOW>;
+			linux,code = <BTN_1>;
+			wakeup-source;
+		};
+		btn2 {
+			label = "BTN2";
+			gpios = <&pioA PIN_PB28 GPIO_ACTIVE_LOW>;
+			linux,code = <BTN_2>;
+			wakeup-source;
+		};
+	};
+
+	lock_feedback {
+		compatible = "gpio-keys";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lock_feedback_default>;
+
+		locked {
+			label = "LOCKED";
+			gpios = <&pioA PIN_PB2 GPIO_ACTIVE_LOW>;
+			debounce-interval = <200>;
+			linux,code = <BTN_3>;
+		};
+	};
+
+	beeper {
+		compatible = "gpio-beeper";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_beeper_gpio_default>;
+		gpios = <&pioA PIN_PB29 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+
+        led_backlight {
+                compatible = "gpio-backlight";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_backlight_gpio_default>;
+                gpios = <&pioA PIN_PA31 GPIO_ACTIVE_HIGH>;
+                default-on;
+        };
+
+	leds {
+		compatible = "gpio-leds";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_led_gpio_default>;
+		status = "okay"; /* Conflict with pwm0. */
+
+		red {
+			label = "red";
+			gpios = <&pioA PIN_PA10 GPIO_ACTIVE_HIGH>;
+		};
+
+		green {
+			label = "green";
+			gpios = <&pioA PIN_PB0 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "heartbeat";
+		};
+	};
+
+	chassis_fan {
+		compatible = "pwm-fan";
+		pwms = <&pwm0 1 40000 PWM_POLARITY_INVERTED>;
+		pwm-value = <0>;
+
+		interrupt-parent = <&pioA>;
+		interrupts = <PIN_PB22 IRQ_TYPE_EDGE_RISING>;
+		pulses-per-revolution = <2>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_chassis_tach_default>;
+	};
+
+	con_fan {
+		compatible = "pwm-fan";
+		pwms = <&pwm0 2 40000 PWM_POLARITY_INVERTED>;
+		pwm-value = <0>;
+
+		interrupt-parent = <&pioA>;
+		interrupts = <PIN_PA27 IRQ_TYPE_EDGE_RISING>;
+		pulses-per-revolution = <2>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_con_tach_default>;
+	};
+
+	pump_fan {
+		compatible = "pwm-fan";
+		pwms = <&pwm0 3 40000 PWM_POLARITY_INVERTED>;
+		pwm-value = <0>;
+	};
+
+	vddin_3v3: fixed-regulator-vddin_3v3 {
+		compatible = "regulator-fixed";
+
+		regulator-name = "VDDIN_3V3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-always-on;
+		regulator-boot-on;
+		status = "okay";
+	};
+
+	vddana: fixed-regulator-vddana {
+		compatible = "regulator-fixed";
+
+		regulator-name = "VDDANA";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-always-on;
+		regulator-boot-on;
+		vin-supply = <&vddin_3v3>;
+		status = "okay";
+	};
+
+	advref: fixed-regulator-advref {
+		compatible = "regulator-fixed";
+
+		regulator-name = "advref";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-always-on;
+		regulator-boot-on;
+		vin-supply = <&vddana>;
+		status = "okay";
+	};
+};
