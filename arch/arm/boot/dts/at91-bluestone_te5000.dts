@@ -269,7 +269,7 @@
 		regulator-always-on;
 	};
 
-	gpio_keys {
+	panel_buttons {
 		compatible = "gpio-keys";
 
 		pinctrl-names = "default";
@@ -303,7 +303,7 @@
 		status = "okay";
 	};
 
-        backlight {
+        led_backlight {
                 compatible = "gpio-backlight";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_backlight_gpio_default>;
