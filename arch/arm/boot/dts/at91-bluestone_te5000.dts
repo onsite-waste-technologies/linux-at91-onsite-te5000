@@ -199,11 +199,6 @@
 					bias-disable;
 				};
 
-				pinctrl_lcd_rst_gpio_default: lcd_rst_gpio_default {
-					pinmux = <PIN_PB17__GPIO>;
-					bias-disable;
-				};
-
 				pinctrl_led_gpio_default: led_gpio_default {
 					pinmux = <PIN_PA10__GPIO>,
 						 <PIN_PB1__GPIO>,
@@ -253,20 +248,6 @@
 		regulator-max-microvolt = <3300000>;
 		regulator-always-on;
 		regulator-boot-on;
-	};
-
-	lcd_rst: fixedregulator@1 {
-		compatible = "regulator-fixed";
-
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_lcd_rst_gpio_default>;
-
-		regulator-name = "*LCD_RST";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&pioA PIN_PB17 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		regulator-always-on;
 	};
 
 	panel_buttons {
