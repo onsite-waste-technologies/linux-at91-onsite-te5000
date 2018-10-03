@@ -160,11 +160,11 @@
 			};
 
 			adc: adc@fc030000 {
-				       vref-supply = <&vdd_3v3>;
-				       vddana-supply = <&vdd_3v3>;
-				       pinctrl-names = "default";
-				       pinctrl-0 = <&pinctrl_an_default>;
-				       status = "okay";
+					vref-supply = <&vdd_3v3>;
+					vddana-supply = <&vdd_3v3>;
+					pinctrl-names = "default";
+					pinctrl-0 = <&pinctrl_an_default>;
+					status = "okay";
 			};
 
 			pinctrl@fc038000 {
