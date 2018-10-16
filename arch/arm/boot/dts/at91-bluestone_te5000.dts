@@ -97,6 +97,26 @@
 			status = "okay";
 		};
 
+
+		sdmmc1: sdio-host@b0000000 {
+			bus-width = <4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_sdmmc1_default>;
+			non-removable;
+			disable-wp;
+			no-1-8-v;
+			status = "okay";
+			wilc_sdio@0{
+				compatible = "atmel,wilc_sdio";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_wilc_default>;
+				gpio_reset = <&pioA PIN_PB15 GPIO_ACTIVE_HIGH>;
+				gpio_chip_en = <&pioA PIN_PB14 GPIO_ACTIVE_HIGH>;
+				gpio_irq = <&pioA PIN_PB16 GPIO_ACTIVE_HIGH>;
+				status = "okay";
+			};
+		};
+
 		apb {
 			pmc: pmc@f0014000 {
 				pmc_fast_restart {
@@ -219,6 +239,34 @@
 
 					ck_cd_vddsel {
 						pinmux = <PIN_PA0__SDMMC0_CK>;
+						bias-disable;
+					};
+				};
+
+				pinctrl_sdmmc1_default: sdmmc1_default {
+					cmd_data {
+						pinmux = <PIN_PA28__SDMMC1_CMD>,
+							 <PIN_PA18__SDMMC1_DAT0>,
+							 <PIN_PA19__SDMMC1_DAT1>,
+							 <PIN_PA20__SDMMC1_DAT2>,
+							 <PIN_PA21__SDMMC1_DAT3>;
+						bias-disable;
+					};
+
+					conf-ck_cd {
+						pinmux = <PIN_PA22__SDMMC1_CK>;
+						bias-disable;
+					};
+				};
+
+				pinctrl_wilc_default: wilc_default {
+					outputs {
+						pinmux = <PIN_PB15__GPIO>,
+							 <PIN_PB14__GPIO>;
+						output-low;
+					};
+					inputs {
+						pinmux = <PIN_PB16__GPIO>;
 						bias-disable;
 					};
 				};
