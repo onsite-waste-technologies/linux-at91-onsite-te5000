@@ -50,6 +50,7 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/pinctrl/at91.h>
 #include <dt-bindings/input/linux-event-codes.h>
+#include <dt-bindings/pwm/pwm.h>
 
 / {
 	model = "Bluestone TE5000";
@@ -149,6 +150,12 @@
 				status = "okay";
 			};
 
+			pwm0: pwm@f802c000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_pwm0_default>;
+				status = "okay";
+			};
+
 			shdwc@f8048010 {
 				atmel,shdwc-debouncer = <976>;
 				atmel,wakeup-rtc-timer;
@@ -216,14 +223,13 @@
 				};
 
 				pinctrl_backlight_gpio_default: backlight_gpio_default {
-					pinmux = <PIN_PB18__GPIO>;
+					pinmux = <PIN_PA31__GPIO>;
 					bias-disable;
 				};
 
 				pinctrl_led_gpio_default: led_gpio_default {
 					pinmux = <PIN_PA10__GPIO>,
-						 <PIN_PB1__GPIO>,
-						 <PIN_PA31__GPIO>;
+						 <PIN_PB0__GPIO>;
 					bias-pull-up;
 				};
 
@@ -274,6 +280,13 @@
 				pinctrl_uart1_default: uart1_default {
 					pinmux = <PIN_PD2__URXD1>,
 						 <PIN_PD3__UTXD1>;
+					bias-disable;
+				};
+
+				pinctrl_pwm0_default: pwm0_default {
+					pinmux = <PIN_PB1__PWML1>,
+						 <PIN_PB6__PWML2>,
+						 <PIN_PB8__PWML3>;
 					bias-disable;
 				};
 
@@ -337,7 +350,7 @@
                 compatible = "gpio-backlight";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_backlight_gpio_default>;
-                gpios = <&pioA PIN_PB18 GPIO_ACTIVE_HIGH>;
+                gpios = <&pioA PIN_PA31 GPIO_ACTIVE_HIGH>;
                 default-on;
         };
 
@@ -354,13 +367,26 @@
 
 		green {
 			label = "green";
-			gpios = <&pioA PIN_PB1 GPIO_ACTIVE_HIGH>;
-		};
-
-		blue {
-			label = "blue";
-			gpios = <&pioA PIN_PA31 GPIO_ACTIVE_HIGH>;
+			gpios = <&pioA PIN_PB0 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "heartbeat";
 		};
+	};
+
+	chassis_fan {
+		compatible = "pwm-fan";
+		pwms = <&pwm0 1 40000 PWM_POLARITY_INVERTED>;
+		pwm-value = <0>;
+	};
+
+	con_fan {
+		compatible = "pwm-fan";
+		pwms = <&pwm0 2 40000 PWM_POLARITY_INVERTED>;
+		pwm-value = <0>;
+	};
+
+	pump_fan {
+		compatible = "pwm-fan";
+		pwms = <&pwm0 3 40000 PWM_POLARITY_INVERTED>;
+		pwm-value = <0>;
 	};
 };
