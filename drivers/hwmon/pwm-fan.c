@@ -223,6 +223,26 @@ static const struct thermal_cooling_device_ops pwm_fan_cooling_ops = {
 	.set_cur_state = pwm_fan_set_cur_state,
 };
 
+static int pwm_fan_of_get_pwm_value(struct device *dev,
+				    struct pwm_fan_ctx *ctx)
+{
+	struct device_node *np = dev->of_node;
+	int ret;
+
+	if (of_find_property(np, "pwm-value", NULL)) {
+		ret = of_property_read_u32(np, "pwm-value", &ctx->pwm_value);
+		if (ret) {
+		    dev_err(dev, "Property 'pwm-value' cannot be read!\n");
+		    return ret;
+		}
+	} else {
+	    /* Set duty cycle to maximum allowed */
+	    ctx->pwm_value = MAX_PWM;
+	}
+
+	return 0;
+}
+
 static int pwm_fan_of_get_cooling_data(struct device *dev,
 				       struct pwm_fan_ctx *ctx)
 {
@@ -326,11 +346,17 @@ static int pwm_fan_probe(struct platform_device *pdev)
 			return ret;
 	}
 
-	ctx->pwm_value = MAX_PWM;
+	ret = pwm_fan_of_get_pwm_value(&pdev->dev, ctx);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to configure PWM value\n");
+		return ret;
+	}
 
 	/* Set duty cycle to maximum allowed and enable PWM output */
 	pwm_init_state(ctx->pwm, &state);
-	state.duty_cycle = ctx->pwm->args.period - 1;
+	state.duty_cycle =
+		DIV_ROUND_UP(ctx->pwm_value * (ctx->pwm->args.period - 1),
+			     MAX_PWM);
 	state.enabled = true;
 
 	ret = pwm_apply_state(ctx->pwm, &state);
@@ -338,6 +364,7 @@ static int pwm_fan_probe(struct platform_device *pdev)
 		dev_err(dev, "Failed to configure PWM: %d\n", ret);
 		return ret;
 	}
+
 	timer_setup(&ctx->rpm_timer, sample_timer, 0);
 	ret = devm_add_action_or_reset(dev, pwm_fan_pwm_disable, ctx);
 	if (ret)
