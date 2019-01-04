@@ -217,6 +217,11 @@
 					bias-pull-up;
 				};
 
+				pinctrl_lock_feedback_default: lock_feedback_default {
+					pinmux = <PIN_PB2__GPIO>;
+					bias-disable;
+				};
+
 				pinctrl_beeper_gpio_default: beeper_gpio_default {
 					pinmux = <PIN_PB29__GPIO>;
 					bias-pull-up;
@@ -335,6 +340,19 @@
 			gpios = <&pioA PIN_PB28 GPIO_ACTIVE_LOW>;
 			linux,code = <BTN_2>;
 			wakeup-source;
+		};
+	};
+
+	lock_feedback {
+		compatible = "gpio-keys";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lock_feedback_default>;
+
+		locked {
+			label = "LOCKED";
+			gpios = <&pioA PIN_PB2 GPIO_ACTIVE_LOW>;
+			debounce-interval = <200>;
+			linux,code = <BTN_3>;
 		};
 	};
 
