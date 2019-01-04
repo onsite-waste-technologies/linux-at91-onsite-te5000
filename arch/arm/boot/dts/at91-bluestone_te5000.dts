@@ -238,6 +238,12 @@
 					bias-pull-up;
 				};
 
+				pinctrl_fans_feedback_default: fans_feedback_default {
+					pinmux = <PIN_PA27__TIOA1>,
+						 <PIN_PB22__TIOA2>;
+					bias-pull-up;
+				};
+
 				pinctrl_sdmmc0_default: sdmmc0_default {
 					cmd_data {
 						pinmux = <PIN_PA1__SDMMC0_CMD>,
@@ -406,5 +412,14 @@
 		compatible = "pwm-fan";
 		pwms = <&pwm0 3 40000 PWM_POLARITY_INVERTED>;
 		pwm-value = <0>;
+	};
+
+	fans_feedback {
+		compatible = "atmel,tcb-hwmon-fan";
+		tc-block = <0>;
+		channels = <1 2>;
+		channel-labels = "CON_TACH", "CHASSIS_TACH";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_fans_feedback_default>;
 	};
 };
