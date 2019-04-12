@@ -185,6 +185,12 @@
 					bias-pull-up;
 				};
 
+				pinctrl_cell_gpio_default: cell_gpio_default {
+					pinmux = <PIN_PB20__GPIO>,
+						 <PIN_PB21__GPIO>;
+					output-high;
+				};
+
 				pinctrl_sdmmc0_default: sdmmc0_default {
 					cmd_data {
 						pinmux = <PIN_PA1__SDMMC0_CMD>,
@@ -297,6 +303,27 @@
 			label = "green";
 			gpios = <&pioA PIN_PB0 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "heartbeat";
+		};
+	};
+
+	cell {
+		/* Not actually connected to LEDs, but there isn't a
+		 * generic kernel-mode GPIO output driver */
+		compatible = "gpio-leds";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_cell_gpio_default>;
+		status = "okay";
+
+		cell_pwr {
+			label = "cell_pwr";
+			gpios = <&pioA PIN_PB20 GPIO_ACTIVE_HIGH>;
+			default-state = "on";
+		};
+
+		cell_reset {
+			label = "cell_reset";
+			gpios = <&pioA PIN_PB21 GPIO_ACTIVE_HIGH>;
+			default-state = "off";
 		};
 	};
 
