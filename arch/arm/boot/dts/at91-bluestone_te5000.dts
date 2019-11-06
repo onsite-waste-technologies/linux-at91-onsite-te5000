@@ -241,7 +241,7 @@
 				pinctrl_cell_gpio_default: cell_gpio_default {
 					pinmux = <PIN_PB20__GPIO>,
 						 <PIN_PB21__GPIO>;
-					output-low;
+					output-high;
 				};
 
 				pinctrl_fans_feedback_default: fans_feedback_default {
@@ -413,11 +413,13 @@
 		cell_pwr {
 			label = "cell_pwr";
 			gpios = <&pioA PIN_PB20 GPIO_ACTIVE_HIGH>;
+			default-state = "on";
 		};
 
 		cell_reset {
 			label = "cell_reset";
 			gpios = <&pioA PIN_PB21 GPIO_ACTIVE_HIGH>;
+			default-state = "off";
 		};
 	};
 
